@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AppView, AppViewType, Surah, QuizQuestion, Verse } from './types';
-import { JUZ_30_SURAHS } from './constants';
+import { JUZ_30_SURAHS, STATIC_QUIZ_DATA } from './constants';
 import { geminiService } from './services/geminiService';
 import { 
   BookOpen, 
@@ -251,18 +251,27 @@ const App: React.FC = () => {
     setErrorNotice(null);
     
     try {
-      const questions = await geminiService.generateQuizQuestions(category);
-      if (questions.length === 0) throw new Error("Gagal mengambil soal kuis.");
+      // Mencoba mengambil soal dari AI
+      let questions = await geminiService.generateQuizQuestions(category);
+      
+      // Jika AI gagal (limitasi kuota), gunakan data lokal dari constants.tsx
+      if (!questions || questions.length === 0) {
+        console.warn("AI failed to provide questions, using local data.");
+        questions = STATIC_QUIZ_DATA[category] || [];
+        if (questions.length === 0) throw new Error("Gagal mengambil soal kuis.");
+        setErrorNotice("Oops, AI sedang sibuk. Menggunakan soal cadangan agar tetap seru!");
+      }
+
       setCurrentQuiz(questions);
 
-      const correct = await geminiService.generateSpeech("Maa Shaa Allah, Benar!");
-      if (correct) setCorrectAudio(correct);
-      const wrong = await geminiService.generateSpeech("Sayang sekali, kurang tepat. Ayo coba lagi!");
-      if (wrong) setWrongAudio(wrong);
+      // Muat suara pujian (juga dengan fallback)
+      geminiService.generateSpeech("Maa Shaa Allah, Benar!").then(s => s && setCorrectAudio(s));
+      geminiService.generateSpeech("Sayang sekali, kurang tepat. Ayo coba lagi!").then(s => s && setWrongAudio(s));
 
       await loadQuizMedia(0, questions);
     } catch (err: any) {
       setErrorNotice(err.message || "Terjadi kesalahan koneksi.");
+      setView(AppView.QUIZ_MENU);
     } finally {
       setLoading(false);
     }
@@ -274,8 +283,12 @@ const App: React.FC = () => {
 
     setItemLoading(true);
     try {
-      const img = await geminiService.generateImage(q.imagePrompt);
-      const audio = await geminiService.generateSpeech(q.arabicWord);
+      // Gambar dan suara tetap dimuat secara dinamis oleh AI
+      const [img, audio] = await Promise.all([
+        geminiService.generateImage(q.imagePrompt),
+        geminiService.generateSpeech(q.arabicWord)
+      ]);
+      
       const updatedQuiz = [...questions];
       updatedQuiz[index] = { 
         ...q, 
@@ -423,7 +436,7 @@ const App: React.FC = () => {
       {errorNotice && (
         <div className="bg-rose-50 border-2 border-rose-200 p-5 rounded-[2rem] mb-6 flex items-center gap-4 animate-in slide-in-from-top-4">
           <AlertTriangle className="text-rose-600 shrink-0" />
-          <p className="text-rose-800 font-bold leading-tight font-sans">{errorNotice}</p>
+          <p className="text-rose-800 font-bold leading-tight font-sans text-sm">{errorNotice}</p>
           <button onClick={() => { playClick(); setErrorNotice(null); }} className="ml-auto text-rose-300 hover:text-rose-600">
             <X size={24} />
           </button>
@@ -518,12 +531,16 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    {currentQuiz[quizIndex].generatedImage && (
+                    {currentQuiz[quizIndex].generatedImage ? (
                       <img 
                         src={currentQuiz[quizIndex].generatedImage} 
                         alt="Visual" 
                         className="w-72 h-72 object-cover rounded-[3rem] shadow-2xl mb-8 border-8 border-white ring-4 ring-emerald-50"
                       />
+                    ) : (
+                      <div className="w-72 h-72 bg-emerald-50 rounded-[3rem] flex items-center justify-center mb-8 border-4 border-emerald-100">
+                        <Sparkles size={100} className="text-emerald-200" />
+                      </div>
                     )}
                     
                     <div className="flex items-center gap-6 mb-4">
@@ -532,7 +549,8 @@ const App: React.FC = () => {
                       </div>
                       <button 
                         onClick={() => playArabicAudio(currentQuiz[quizIndex].audioData!)}
-                        className="w-16 h-16 bg-emerald-500 rounded-[1.5rem] flex items-center justify-center text-white shadow-[0_6px_0_rgb(5,150,105)] active:translate-y-1 transition-all"
+                        disabled={!currentQuiz[quizIndex].audioData}
+                        className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-white shadow-[0_6px_0_rgb(5,150,105)] active:translate-y-1 transition-all ${!currentQuiz[quizIndex].audioData ? 'bg-gray-300 shadow-none' : 'bg-emerald-500'}`}
                       >
                         <Volume2 size={36}/>
                       </button>

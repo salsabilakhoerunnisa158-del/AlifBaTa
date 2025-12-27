@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { QuizQuestion } from "../types";
 
-const RETRY_DELAY = 2000;
-const MAX_RETRIES = 3;
+const RETRY_DELAY = 1500;
+const MAX_RETRIES = 2;
 
 async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay = RETRY_DELAY): Promise<T> {
   try {
@@ -11,7 +11,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
   } catch (error: any) {
     const isQuotaError = error?.message?.includes('429') || error?.status === 429 || error?.code === 429;
     if (retries > 0 && isQuotaError) {
-      console.warn(`Quota exceeded. Retrying in ${delay}ms... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
     }
@@ -29,10 +28,14 @@ export const geminiService = {
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Buat 10 pertanyaan kuis kosakata Bahasa Arab untuk anak-anak tentang kategori: ${category}.
-Setiap pertanyaan harus memiliki 4 pilihan jawaban dan 1 jawaban benar. 
-Pastikan kosakata yang dipilih umum dan mudah dipahami anak-anak.
-Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar kata tersebut (misal: 'a cute cartoon cat').`,
+        contents: `Generate exactly 10 multiple-choice quiz questions for children about Arabic vocabulary in the category: "${category}".
+Return the response in a strictly valid JSON array of objects format.
+Each object must have:
+- "question": (string) "Apa bahasa Arabnya [Indonesian Word]?" or similar simple question in Indonesian.
+- "arabicWord": (string) The word in Arabic script with harakat.
+- "options": (array of 4 strings) 1 correct and 3 wrong options in Arabic transliteration (Latin).
+- "correctAnswer": (string) The correct transliteration from options.
+- "imagePrompt": (string) A simple English visual description like "a cute cartoon [word]".`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -52,10 +55,13 @@ Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar k
         }
       });
       
-      return JSON.parse(response.text || '[]');
+      const text = response.text;
+      if (!text) return [];
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed) ? parsed : [];
     }).catch(err => {
-      console.error("Final quiz generation error:", err);
-      return [];
+      console.error("AI quiz generation failed:", err);
+      return []; // Return empty to trigger fallback in App.tsx
     });
   },
 
@@ -65,7 +71,7 @@ Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar k
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `Cute, vibrant colorful 3D clay style cartoon illustration for kids, isolated on solid background: ${prompt}` }],
+          parts: [{ text: `Cute vibrant colorful 3D clay style cartoon illustration for children, centered, solid pastel background: ${prompt}` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -75,7 +81,7 @@ Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar k
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     }).catch(err => {
-      console.error("Image generation failed after retries:", err);
+      console.error("Image generation failed:", err);
       return undefined;
     });
   },
@@ -85,7 +91,7 @@ Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar k
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Sebutkan kosakata bahasa arab ini dengan perlahan dan jelas untuk belajar anak: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan sangat jelas dan perlahan untuk anak-anak: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -98,7 +104,7 @@ Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar k
       
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     }).catch(err => {
-      console.error("Speech generation failed after retries:", err);
+      console.error("Speech generation failed:", err);
       return undefined;
     });
   },
@@ -108,12 +114,12 @@ Berikan 'imagePrompt' berupa deskripsi singkat bahasa Inggris untuk menggambar k
       const ai = this.getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Jelaskan makna atau kisah di balik Surah ${surahName} dalam Juz 30 kepada anak berusia 7 tahun dengan bahasa yang sederhana, ceria, dan penuh hikmah. Maksimal 3 paragraf pendek.`,
+        contents: `Ceritakan kisah atau makna Surah ${surahName} (Juz 30) untuk anak-anak. Gunakan bahasa yang sangat sederhana, penuh kasih, dan ceria. Maksimal 150 kata.`,
       });
-      return response.text || "Tafsir tidak tersedia.";
+      return response.text || "Cerita indah tentang surah ini akan segera hadir!";
     }).catch(err => {
       console.error("Tafsir fetch error:", err);
-      return "Maaf, Ustadz AI sedang beristirahat. Yuk baca Al-Qur'an dulu!";
+      return "Ustadz AI sedang beristirahat sebentar. Yuk baca Al-Qur'an dulu!";
     });
   }
 };

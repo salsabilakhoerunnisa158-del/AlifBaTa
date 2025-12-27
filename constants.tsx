@@ -1,5 +1,5 @@
 
-import { ArabicWord, Surah } from './types';
+import { ArabicWord, Surah, QuizQuestion } from './types';
 
 export const JUZ_30_SURAHS: Surah[] = [
   { number: 78, name: "النبا", transliteration: "An-Naba", translation: "Berita Besar", totalVerses: 40, revelationType: 'Meccan' },
@@ -41,13 +41,77 @@ export const JUZ_30_SURAHS: Surah[] = [
   { number: 114, name: "الناس", transliteration: "An-Nas", translation: "Manusia", totalVerses: 6, revelationType: 'Meccan' },
 ];
 
-export const ARABIC_VOCAB: ArabicWord[] = [
-  { arabic: "تُفَّاحَةٌ", latin: "Tuffahatun", meaning: "Apel", category: "Buah", image: "https://picsum.photos/seed/apple/200/200" },
-  { arabic: "قِطٌّ", latin: "Qittun", meaning: "Kucing", category: "Hewan", image: "https://picsum.photos/seed/cat/200/200" },
-  { arabic: "كِتَابٌ", latin: "Kitabun", meaning: "Buku", category: "Benda", image: "https://picsum.photos/seed/book/200/200" },
-  { arabic: "بَيْتٌ", latin: "Baytun", meaning: "Rumah", category: "Benda", image: "https://picsum.photos/seed/house/200/200" },
-  { arabic: "أَبٌ", latin: "Abun", meaning: "Ayah", category: "Keluarga", image: "https://picsum.photos/seed/father/200/200" },
-  { arabic: "أُمٌّ", latin: "Ummun", meaning: "Ibu", category: "Keluarga", image: "https://picsum.photos/seed/mother/200/200" },
-  { arabic: "سَيَّارَةٌ", latin: "Sayyaratun", meaning: "Mobil", category: "Kendaraan", image: "https://picsum.photos/seed/car/200/200" },
-  { arabic: "مَدْرَسَةٌ", latin: "Madrasatun", meaning: "Sekolah", category: "Tempat", image: "https://picsum.photos/seed/school/200/200" },
-];
+export const STATIC_QUIZ_DATA: Record<string, QuizQuestion[]> = {
+  'Hewan Lucu': [
+    { question: "Apa bahasa Arabnya Kucing?", options: ["Qittun", "Kalbun", "Asadun", "Fiilun"], correctAnswer: "Qittun", arabicWord: "قِطٌّ", imagePrompt: "cute cartoon cat" },
+    { question: "Apa bahasa Arabnya Gajah?", options: ["Jamalun", "Fiilun", "Asadun", "Arnabun"], correctAnswer: "Fiilun", arabicWord: "فِيْلٌ", imagePrompt: "cute cartoon elephant" },
+    { question: "Apa bahasa Arabnya Singa?", options: ["Asadun", "Kalbun", "Qittun", "Jamalun"], correctAnswer: "Asadun", arabicWord: "أَسَدٌ", imagePrompt: "cute cartoon lion" },
+    { question: "Apa bahasa Arabnya Kelinci?", options: ["Arnabun", "Kalbun", "Qittun", "Fiilun"], correctAnswer: "Arnabun", arabicWord: "أَرْنَبٌ", imagePrompt: "cute cartoon rabbit" },
+    { question: "Apa bahasa Arabnya Unta?", options: ["Jamalun", "Kalbun", "Fiilun", "Asadun"], correctAnswer: "Jamalun", arabicWord: "جَمَلٌ", imagePrompt: "cute cartoon camel" },
+    { question: "Apa bahasa Arabnya Burung?", options: ["Thairun", "Samakun", "Qittun", "Kalbun"], correctAnswer: "Thairun", arabicWord: "طَيْرٌ", imagePrompt: "cute cartoon bird" },
+    { question: "Apa bahasa Arabnya Ikan?", options: ["Samakun", "Thairun", "Kalbun", "Arnabun"], correctAnswer: "Samakun", arabicWord: "سَمَكٌ", imagePrompt: "cute cartoon fish" },
+    { question: "Apa bahasa Arabnya Kuda?", options: ["Hishaanun", "Fiilun", "Asadun", "Arnabun"], correctAnswer: "Hishaanun", arabicWord: "حِصَانٌ", imagePrompt: "cute cartoon horse" },
+    { question: "Apa bahasa Arabnya Sapi?", options: ["Baqaratun", "Kalbun", "Jamalun", "Asadun"], correctAnswer: "Baqaratun", arabicWord: "بَقَرَةٌ", imagePrompt: "cute cartoon cow" },
+    { question: "Apa bahasa Arabnya Monyet?", options: ["Qirdun", "Kalbun", "Asadun", "Fiilun"], correctAnswer: "Qirdun", arabicWord: "قِرْدٌ", imagePrompt: "cute cartoon monkey" },
+  ],
+  'Buah Segar': [
+    { question: "Apa bahasa Arabnya Apel?", options: ["Tuffahatun", "Mauzun", "Burtuqalun", "Inabun"], correctAnswer: "Tuffahatun", arabicWord: "تُفَّاحَةٌ", imagePrompt: "shiny red apple cartoon" },
+    { question: "Apa bahasa Arabnya Pisang?", options: ["Mauzun", "Tuffahatun", "Inabun", "Burtuqalun"], correctAnswer: "Mauzun", arabicWord: "مَوْزٌ", imagePrompt: "yellow banana cartoon" },
+    { question: "Apa bahasa Arabnya Jeruk?", options: ["Burtuqalun", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Burtuqalun", arabicWord: "بُرْتُقَالٌ", imagePrompt: "fresh orange fruit cartoon" },
+    { question: "Apa bahasa Arabnya Anggur?", options: ["Inabun", "Mauzun", "Tuffahatun", "Burtuqalun"], correctAnswer: "Inabun", arabicWord: "عِنَبٌ", imagePrompt: "bunch of purple grapes cartoon" },
+    { question: "Apa bahasa Arabnya Semangka?", options: ["Bitthikhun", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Bitthikhun", arabicWord: "بِطِّيْخٌ", imagePrompt: "watermelon slice cartoon" },
+    { question: "Apa bahasa Arabnya Kurma?", options: ["Tamrun", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Tamrun", arabicWord: "تَمْرٌ", imagePrompt: "dates fruit cartoon" },
+    { question: "Apa bahasa Arabnya Nanas?", options: ["Ananasun", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Ananasun", arabicWord: "أَنَانَاسٌ", imagePrompt: "pineapple cartoon" },
+    { question: "Apa bahasa Arabnya Delima?", options: ["Rummaanun", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Rummaanun", arabicWord: "رُمَّانٌ", imagePrompt: "pomegranate cartoon" },
+    { question: "Apa bahasa Arabnya Stroberi?", options: ["Farawilatun", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Farawilatun", arabicWord: "فَرَاوِلَةٌ", imagePrompt: "strawberry cartoon" },
+    { question: "Apa bahasa Arabnya Mangga?", options: ["Manju", "Mauzun", "Tuffahatun", "Inabun"], correctAnswer: "Manju", arabicWord: "مَنْجُو", imagePrompt: "mango fruit cartoon" },
+  ],
+  'Benda di Rumah': [
+    { question: "Apa bahasa Arabnya Pintu?", options: ["Baabun", "Nafidzatun", "Kursiyyun", "Maktabun"], correctAnswer: "Baabun", arabicWord: "بَابٌ", imagePrompt: "wooden door cartoon" },
+    { question: "Apa bahasa Arabnya Jendela?", options: ["Nafidzatun", "Baabun", "Kursiyyun", "Sariirun"], correctAnswer: "Nafidzatun", arabicWord: "نَافِذَةٌ", imagePrompt: "open window cartoon" },
+    { question: "Apa bahasa Arabnya Kursi?", options: ["Kursiyyun", "Maktabun", "Baabun", "Sariirun"], correctAnswer: "Kursiyyun", arabicWord: "كُرْسِيٌّ", imagePrompt: "wooden chair cartoon" },
+    { question: "Apa bahasa Arabnya Meja?", options: ["Maktabun", "Kursiyyun", "Baabun", "Sariirun"], correctAnswer: "Maktabun", arabicWord: "مَكْتَبٌ", imagePrompt: "desk table cartoon" },
+    { question: "Apa bahasa Arabnya Tempat Tidur?", options: ["Sariirun", "Kursiyyun", "Maktabun", "Baabun"], correctAnswer: "Sariirun", arabicWord: "سَرِيْرٌ", imagePrompt: "cozy bed cartoon" },
+    { question: "Apa bahasa Arabnya Lampu?", options: ["Misbaahun", "Baabun", "Kursiyyun", "Maktabun"], correctAnswer: "Misbaahun", arabicWord: "مِصْبَاحٌ", imagePrompt: "desk lamp cartoon" },
+    { question: "Apa bahasa Arabnya Kunci?", options: ["Miftahun", "Baabun", "Kursiyyun", "Maktabun"], correctAnswer: "Miftahun", arabicWord: "مِفْتَاحٌ", imagePrompt: "golden key cartoon" },
+    { question: "Apa bahasa Arabnya Kipas Angin?", options: ["Mirwahatun", "Baabun", "Kursiyyun", "Maktabun"], correctAnswer: "Mirwahatun", arabicWord: "مِرْوَحَةٌ", imagePrompt: "electric fan cartoon" },
+    { question: "Apa bahasa Arabnya Jam?", options: ["Saa'atun", "Baabun", "Kursiyyun", "Maktabun"], correctAnswer: "Saa'atun", arabicWord: "سَاعَةٌ", imagePrompt: "wall clock cartoon" },
+    { question: "Apa bahasa Arabnya Telepon?", options: ["Haatifun", "Baabun", "Kursiyyun", "Maktabun"], correctAnswer: "Haatifun", arabicWord: "هَاتِفٌ", imagePrompt: "telephone cartoon" },
+  ],
+  'Anggota Keluarga': [
+    { question: "Apa bahasa Arabnya Ayah?", options: ["Abun", "Ummun", "Akhun", "Ukhtun"], correctAnswer: "Abun", arabicWord: "أَبٌ", imagePrompt: "father cartoon" },
+    { question: "Apa bahasa Arabnya Ibu?", options: ["Ummun", "Abun", "Akhun", "Ukhtun"], correctAnswer: "Ummun", arabicWord: "أُمٌّ", imagePrompt: "mother cartoon" },
+    { question: "Apa bahasa Arabnya Saudara Laki-laki?", options: ["Akhun", "Ukhtun", "Abun", "Ummun"], correctAnswer: "Akhun", arabicWord: "أَخٌ", imagePrompt: "brother cartoon" },
+    { question: "Apa bahasa Arabnya Saudara Perempuan?", options: ["Ukhtun", "Akhun", "Abun", "Ummun"], correctAnswer: "Ukhtun", arabicWord: "أُخْتٌ", imagePrompt: "sister cartoon" },
+    { question: "Apa bahasa Arabnya Kakek?", options: ["Jaddun", "Jaddatun", "Abun", "Ummun"], correctAnswer: "Jaddun", arabicWord: "جَدٌّ", imagePrompt: "grandfather cartoon" },
+    { question: "Apa bahasa Arabnya Nenek?", options: ["Jaddatun", "Jaddun", "Abun", "Ummun"], correctAnswer: "Jaddatun", arabicWord: "جَدَّةٌ", imagePrompt: "grandmother cartoon" },
+    { question: "Apa bahasa Arabnya Anak Laki-laki?", options: ["Waladun", "Bintun", "Abun", "Ummun"], correctAnswer: "Waladun", arabicWord: "وَلَدٌ", imagePrompt: "boy cartoon" },
+    { question: "Apa bahasa Arabnya Anak Perempuan?", options: ["Bintun", "Waladun", "Abun", "Ummun"], correctAnswer: "Bintun", arabicWord: "بِنْتٌ", imagePrompt: "girl cartoon" },
+    { question: "Apa bahasa Arabnya Paman?", options: ["Ammun", "Ammatun", "Abun", "Ummun"], correctAnswer: "Ammun", arabicWord: "عَمٌّ", imagePrompt: "uncle cartoon" },
+    { question: "Apa bahasa Arabnya Bibi?", options: ["Ammatun", "Ammun", "Abun", "Ummun"], correctAnswer: "Ammatun", arabicWord: "عَمَّةٌ", imagePrompt: "aunt cartoon" },
+  ],
+  'Warna-warni': [
+    { question: "Apa bahasa Arabnya Merah?", options: ["Ahmaru", "Azraqu", "Abhyadu", "Aswadu"], correctAnswer: "Ahmaru", arabicWord: "أَحْمَرُ", imagePrompt: "red color splash" },
+    { question: "Apa bahasa Arabnya Biru?", options: ["Azraqu", "Ahmaru", "Akhdaru", "Asfaru"], correctAnswer: "Azraqu", arabicWord: "أَزْرَقُ", imagePrompt: "blue color splash" },
+    { question: "Apa bahasa Arabnya Hijau?", options: ["Akhdaru", "Ahmaru", "Azraqu", "Asfaru"], correctAnswer: "Akhdaru", arabicWord: "أَخْضَرُ", imagePrompt: "green color splash" },
+    { question: "Apa bahasa Arabnya Kuning?", options: ["Asfaru", "Ahmaru", "Azraqu", "Akhdaru"], correctAnswer: "Asfaru", arabicWord: "أَصْفَرُ", imagePrompt: "yellow color splash" },
+    { question: "Apa bahasa Arabnya Putih?", options: ["Abhyadu", "Aswadu", "Ahmaru", "Azraqu"], correctAnswer: "Abhyadu", arabicWord: "أَبْيَضُ", imagePrompt: "white color splash" },
+    { question: "Apa bahasa Arabnya Hitam?", options: ["Aswadu", "Abhyadu", "Ahmaru", "Azraqu"], correctAnswer: "Aswadu", arabicWord: "أَسْوَدُ", imagePrompt: "black color splash" },
+    { question: "Apa bahasa Arabnya Cokelat?", options: ["Bunniyyun", "Ahmaru", "Azraqu", "Akhdaru"], correctAnswer: "Bunniyyun", arabicWord: "بُنِّيٌّ", imagePrompt: "brown color splash" },
+    { question: "Apa bahasa Arabnya Oranye?", options: ["Burtuqaaliyyun", "Ahmaru", "Azraqu", "Akhdaru"], correctAnswer: "Burtuqaaliyyun", arabicWord: "بُرْتُقَالِيٌّ", imagePrompt: "orange color splash" },
+    { question: "Apa bahasa Arabnya Merah Muda?", options: ["Wardiyyun", "Ahmaru", "Azraqu", "Akhdaru"], correctAnswer: "Wardiyyun", arabicWord: "وَرْدِيٌّ", imagePrompt: "pink color splash" },
+    { question: "Apa bahasa Arabnya Ungu?", options: ["Banafsajiyyun", "Ahmaru", "Azraqu", "Akhdaru"], correctAnswer: "Banafsajiyyun", arabicWord: "بَنَفْسَجِيٌّ", imagePrompt: "purple color splash" },
+  ],
+  'Angka Arab': [
+    { question: "Wahidun artinya?", options: ["1", "2", "3", "4"], correctAnswer: "1", arabicWord: "وَاحِدٌ", imagePrompt: "number 1 cartoon" },
+    { question: "Itsnaini artinya?", options: ["2", "1", "3", "4"], correctAnswer: "2", arabicWord: "اِثْنَانِ", imagePrompt: "number 2 cartoon" },
+    { question: "Tsalatsatun artinya?", options: ["3", "2", "1", "4"], correctAnswer: "3", arabicWord: "ثَلَاثَةٌ", imagePrompt: "number 3 cartoon" },
+    { question: "Arba'atun artinya?", options: ["4", "3", "2", "1"], correctAnswer: "4", arabicWord: "أَرْبَعَةٌ", imagePrompt: "number 4 cartoon" },
+    { question: "Khamsatun artinya?", options: ["5", "4", "3", "2"], correctAnswer: "5", arabicWord: "خَمْسَةٌ", imagePrompt: "number 5 cartoon" },
+    { question: "Sittatun artinya?", options: ["6", "5", "4", "3"], correctAnswer: "6", arabicWord: "سِتَّةٌ", imagePrompt: "number 6 cartoon" },
+    { question: "Sab'atun artinya?", options: ["7", "6", "5", "4"], correctAnswer: "7", arabicWord: "سَبْعَةٌ", imagePrompt: "number 7 cartoon" },
+    { question: "Tsamaniyatun artinya?", options: ["8", "7", "6", "5"], correctAnswer: "8", arabicWord: "ثَمَانِيَةٌ", imagePrompt: "number 8 cartoon" },
+    { question: "Tis'atun artinya?", options: ["9", "8", "7", "6"], correctAnswer: "9", arabicWord: "تِسْعَةٌ", imagePrompt: "number 9 cartoon" },
+    { question: "Asyaratun artinya?", options: ["10", "9", "8", "7"], correctAnswer: "10", arabicWord: "عَشَرَةٌ", imagePrompt: "number 10 cartoon" },
+  ]
+};
