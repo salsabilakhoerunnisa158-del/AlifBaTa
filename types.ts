@@ -36,10 +36,12 @@ export interface Surah {
   revelationType: 'Meccan' | 'Medinan';
 }
 
-export enum AppView {
-  LANDING = 'LANDING',
-  QUIZ_MENU = 'QUIZ_MENU',
-  QUIZ_GAME = 'QUIZ_GAME',
-  JUZ_30 = 'JUZ_30',
-  ACHIEVEMENTS = 'ACHIEVEMENTS'
-}
+export const AppView = {
+  LANDING: 'LANDING',
+  QUIZ_MENU: 'QUIZ_MENU',
+  QUIZ_GAME: 'QUIZ_GAME',
+  JUZ_30: 'JUZ_30',
+  ACHIEVEMENTS: 'ACHIEVEMENTS'
+} as const;
+
+export type AppViewType = typeof AppView[keyof typeof AppView];

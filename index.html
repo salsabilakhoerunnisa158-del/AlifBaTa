@@ -11,11 +11,13 @@
         body {
             font-family: 'Quicksand', sans-serif;
             background-color: #F0FDF4; /* Light Emerald */
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
         }
         .font-kids { font-family: 'Fredoka One', cursive; }
         .font-arabic { font-family: 'Amiri', serif; }
         
-        /* Custom Scrollbar for better aesthetics */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -34,16 +36,18 @@
 <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
     <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
