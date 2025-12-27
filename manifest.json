@@ -3,7 +3,7 @@
   "name": "AlifBaTa Kids: Belajar Arab",
   "short_name": "AlifBaTa",
   "description": "Petualangan Seru Belajar Bahasa Arab & Juz 30",
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#F0FDF4",
   "theme_color": "#10b981",
