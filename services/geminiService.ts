@@ -19,8 +19,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
 }
 
 export const geminiService = {
+  // Always use a new instance with the current API key
   getAI() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
   },
 
   async generateQuizQuestions(category: string): Promise<QuizQuestion[]> {

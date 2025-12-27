@@ -63,7 +63,7 @@ const Card: React.FC<{ children: React.ReactNode; className?: string; onClick?: 
   </div>
 );
 
-const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void; className?: string }> = ({ children, variant = 'primary', onClick, className = "" }) => {
+const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void; className?: string; disabled?: boolean }> = ({ children, variant = 'primary', onClick, className = "", disabled }) => {
   const styles = {
     primary: "bg-emerald-500 hover:bg-emerald-600 border-emerald-700 text-white",
     secondary: "bg-amber-400 hover:bg-amber-500 border-amber-600 text-white",
@@ -72,8 +72,9 @@ const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secon
 
   return (
     <button 
+      disabled={disabled}
       onClick={onClick}
-      className={`px-8 py-4 rounded-2xl font-kids text-xl border-b-4 transition-all active:translate-y-1 active:border-b-0 ${styles[variant]} ${className}`}
+      className={`px-8 py-4 rounded-2xl font-kids text-xl border-b-4 transition-all active:translate-y-1 active:border-b-0 ${styles[variant]} ${className} ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
     >
       {children}
     </button>
@@ -126,7 +127,6 @@ const App: React.FC = () => {
       console.error("LocalStorage error", e);
     }
 
-    // Audio Inits
     bgMusicRef.current = new Audio("https://cdn.pixabay.com/audio/2022/10/30/audio_517935f111.mp3"); 
     bgMusicRef.current.loop = true;
     bgMusicRef.current.volume = 0.12; 
@@ -203,75 +203,43 @@ const App: React.FC = () => {
     }
   };
 
-  const playAyatAudio = (surahNum: number, ayahNum: number, index: number) => {
-    ensureMusicPlaying();
-    playClick();
-    if (ayatAudioRef.current) {
-      ayatAudioRef.current.pause();
-    }
-    
-    setLoadingAyat(index);
-    setPlayingAyat(null);
-    
-    const s = surahNum.toString().padStart(3, '0');
-    const a = ayahNum.toString().padStart(3, '0');
-    const url = `https://mirrors.quranicaudio.com/everyayah.com/data/Alafasy_128kbps/${s}${a}.mp3`;
-    
-    const audio = new Audio(url);
-    ayatAudioRef.current = audio;
-
-    audio.oncanplaythrough = () => {
-      setLoadingAyat(null);
-      setPlayingAyat(index);
-      audio.play().catch(e => {
-        console.error("Murottal play error:", e);
-        setErrorNotice("Gagal memutar murottal. Periksa internetmu.");
-        setPlayingAyat(null);
-      });
-    };
-
-    audio.onerror = () => {
-      setErrorNotice("Audio ayat ini sedang tidak tersedia.");
-      setLoadingAyat(null);
-      setPlayingAyat(null);
-    };
-
-    audio.onended = () => setPlayingAyat(null);
-  };
-
   const startQuiz = async (category: string) => {
     playClick();
     ensureMusicPlaying();
     setLoading(true);
-    setView(AppView.QUIZ_GAME);
-    setQuizIndex(0);
-    setScore(0);
-    setSelectedOption(null);
-    setAnswering(false);
     setErrorNotice(null);
     
     try {
-      // Mencoba mengambil soal dari AI
+      // 1. Ambil data (Tunggu sampai soal benar-benar ada baru ganti View)
       let questions = await geminiService.generateQuizQuestions(category);
       
-      // Jika AI gagal (limitasi kuota), gunakan data lokal dari constants.tsx
+      // 2. Fallback jika AI gagal
       if (!questions || questions.length === 0) {
-        console.warn("AI failed to provide questions, using local data.");
+        console.warn("AI busy, using local static data for category:", category);
         questions = STATIC_QUIZ_DATA[category] || [];
-        if (questions.length === 0) throw new Error("Gagal mengambil soal kuis.");
-        setErrorNotice("Oops, AI sedang sibuk. Menggunakan soal cadangan agar tetap seru!");
+        if (questions.length === 0) throw new Error("Gagal memuat soal kuis lokal.");
+        setErrorNotice("AI sedang beristirahat, kita pakai soal cadangan dulu ya! ✨");
       }
 
+      // 3. Set State Kuis
       setCurrentQuiz(questions);
+      setQuizIndex(0);
+      setScore(0);
+      setSelectedOption(null);
+      setAnswering(false);
+      
+      // 4. Ganti View ke layar Game Kuis
+      setView(AppView.QUIZ_GAME);
 
-      // Muat suara pujian (juga dengan fallback)
+      // Muat suara pujian
       geminiService.generateSpeech("Maa Shaa Allah, Benar!").then(s => s && setCorrectAudio(s));
       geminiService.generateSpeech("Sayang sekali, kurang tepat. Ayo coba lagi!").then(s => s && setWrongAudio(s));
 
+      // 5. Muat media soal pertama
       await loadQuizMedia(0, questions);
     } catch (err: any) {
-      setErrorNotice(err.message || "Terjadi kesalahan koneksi.");
-      setView(AppView.QUIZ_MENU);
+      console.error("Quiz Start Error:", err);
+      setErrorNotice(err.message || "Gagal memulai kuis. Periksa internetmu.");
     } finally {
       setLoading(false);
     }
@@ -283,7 +251,6 @@ const App: React.FC = () => {
 
     setItemLoading(true);
     try {
-      // Gambar dan suara tetap dimuat secara dinamis oleh AI
       const [img, audio] = await Promise.all([
         geminiService.generateImage(q.imagePrompt),
         geminiService.generateSpeech(q.arabicWord)
@@ -298,7 +265,7 @@ const App: React.FC = () => {
       setCurrentQuiz(updatedQuiz);
       if (audio) playArabicAudio(audio);
     } catch (err) {
-      console.error("Failed to load quiz media:", err);
+      console.error("Media load error:", err);
     } finally {
       setItemLoading(false);
     }
@@ -337,6 +304,50 @@ const App: React.FC = () => {
         setView(AppView.ACHIEVEMENTS);
       }
     }, 2500);
+  };
+
+  // --- Fix: Implemented missing playAyatAudio function ---
+  const playAyatAudio = (surahNumber: number, ayatNumber: number, index: number) => {
+    playClick();
+    ensureMusicPlaying();
+    
+    // Toggle stop if already playing the same ayat
+    if (playingAyat === index) {
+      if (ayatAudioRef.current) {
+        ayatAudioRef.current.pause();
+        setPlayingAyat(null);
+      }
+      return;
+    }
+
+    setLoadingAyat(index);
+    const audioUrl = verses[index].audio["01"];
+    
+    if (ayatAudioRef.current) {
+      ayatAudioRef.current.pause();
+    }
+
+    const audio = new Audio(audioUrl);
+    ayatAudioRef.current = audio;
+    
+    audio.onplay = () => {
+      setLoadingAyat(null);
+      setPlayingAyat(index);
+    };
+    
+    audio.onended = () => {
+      setPlayingAyat(null);
+    };
+
+    audio.onerror = () => {
+      setLoadingAyat(null);
+      setErrorNotice("Gagal memutar audio ayat.");
+    };
+
+    audio.play().catch(err => {
+      console.error("Audio play error", err);
+      setLoadingAyat(null);
+    });
   };
 
   const openSurahDetail = async (surah: Surah) => {
@@ -443,6 +454,16 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Loading Overlay Global */}
+      {loading && view !== AppView.QUIZ_GAME && (
+        <div className="fixed inset-0 bg-emerald-900/40 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-8">
+          <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center">
+             <Loader2 size={64} className="text-emerald-500 animate-spin mb-4" />
+             <p className="text-2xl font-kids text-emerald-800">Menyiapkan Kuis Seru...</p>
+          </div>
+        </div>
+      )}
+
       {/* Landing */}
       {view === AppView.LANDING && (
         <div className="space-y-6 animate-in fade-in duration-700">
@@ -494,11 +515,14 @@ const App: React.FC = () => {
             {['Hewan Lucu', 'Buah Segar', 'Benda di Rumah', 'Anggota Keluarga', 'Warna-warni', 'Angka Arab'].map((cat) => (
               <button 
                key={cat} 
+               disabled={loading}
                onClick={() => startQuiz(cat)}
-               className="flex items-center justify-between bg-white p-7 rounded-[2.5rem] border-b-[10px] border-gray-100 active:translate-y-1 active:border-b-[5px] transition-all hover:bg-emerald-50 group shadow-lg"
+               className="flex items-center justify-between bg-white p-7 rounded-[2.5rem] border-b-[10px] border-gray-100 active:translate-y-1 active:border-b-[5px] transition-all hover:bg-emerald-50 group shadow-lg disabled:opacity-50"
               >
                 <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors shadow-inner"><BrainCircuit size={32} /></div>
+                  <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors shadow-inner">
+                    {loading ? <Loader2 className="animate-spin"/> : <BrainCircuit size={32} />}
+                  </div>
                   <span className="text-2xl font-bold text-gray-700 font-kids">{cat}</span>
                 </div>
                 <ChevronRight className="text-gray-300 group-hover:text-emerald-500 transition-colors" />
@@ -510,13 +534,8 @@ const App: React.FC = () => {
 
       {/* Quiz Game */}
       {view === AppView.QUIZ_GAME && (
-        <div className="space-y-6">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center pt-24 text-center">
-              <Loader2 className="w-24 h-24 text-emerald-500 animate-spin mb-8" />
-              <p className="text-3xl font-kids text-emerald-800">Menyiapkan Kuis Seru... </p>
-            </div>
-          ) : currentQuiz[quizIndex] && (
+        <div className="space-y-6 animate-in zoom-in-95">
+          {currentQuiz[quizIndex] && (
             <>
               <div className="flex items-center justify-between px-3">
                 <span className="font-kids text-xl text-emerald-700">Soal {quizIndex + 1} / {currentQuiz.length}</span>
@@ -527,7 +546,7 @@ const App: React.FC = () => {
                 {itemLoading ? (
                   <div className="flex flex-col items-center gap-6 py-12">
                     <Music className="text-emerald-200 w-24 h-24 animate-bounce" />
-                    <p className="text-emerald-800 font-kids text-2xl">Memuat gambar... </p>
+                    <p className="text-emerald-800 font-kids text-2xl">Memuat gambar kuis...</p>
                   </div>
                 ) : (
                   <>
