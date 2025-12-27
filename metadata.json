@@ -1,0 +1,7 @@
+{
+  "name": "AlifBaTa Kids: Belajar Arab & Juz 30",
+  "description": "Aplikasi edukasi interaktif untuk anak-anak muslim belajar kosakata bahasa Arab melalui kuis seru dan pelacakan hafalan Juz 30.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
