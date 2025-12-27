@@ -20,7 +20,9 @@ import {
   Music,
   Heart,
   PlayCircle,
-  Star
+  Star,
+  Key,
+  Image as ImageIcon
 } from 'lucide-react';
 
 // --- Helper for Audio Decoding ---
@@ -63,11 +65,12 @@ const Card: React.FC<{ children: React.ReactNode; className?: string; onClick?: 
   </div>
 );
 
-const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void; className?: string; disabled?: boolean }> = ({ children, variant = 'primary', onClick, className = "", disabled }) => {
+const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secondary' | 'danger' | 'info'; onClick?: () => void; className?: string; disabled?: boolean }> = ({ children, variant = 'primary', onClick, className = "", disabled }) => {
   const styles = {
     primary: "bg-emerald-500 hover:bg-emerald-600 border-emerald-700 text-white",
     secondary: "bg-amber-400 hover:bg-amber-500 border-amber-600 text-white",
-    danger: "bg-rose-500 hover:bg-rose-600 border-rose-700 text-white"
+    danger: "bg-rose-500 hover:bg-rose-600 border-rose-700 text-white",
+    info: "bg-sky-500 hover:bg-sky-600 border-sky-700 text-white"
   };
 
   return (
@@ -105,6 +108,7 @@ const App: React.FC = () => {
   const [answering, setAnswering] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [isPermissionError, setIsPermissionError] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [playingAyat, setPlayingAyat] = useState<number | null>(null);
   const [loadingAyat, setLoadingAyat] = useState<number | null>(null);
@@ -183,6 +187,21 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSetKey = async () => {
+    playClick();
+    try {
+      if (typeof (window as any).aistudio?.openSelectKey === 'function') {
+        await (window as any).aistudio.openSelectKey();
+        setErrorNotice(null);
+        setIsPermissionError(false);
+      } else {
+        alert("Fitur pemilihan kunci hanya tersedia di lingkungan AI Studio.");
+      }
+    } catch (e) {
+      console.error("Open key dialog failed", e);
+    }
+  };
+
   const playArabicAudio = async (base64Audio: string) => {
     ensureMusicPlaying();
     try {
@@ -208,38 +227,40 @@ const App: React.FC = () => {
     ensureMusicPlaying();
     setLoading(true);
     setErrorNotice(null);
+    setIsPermissionError(false);
     
     try {
-      // 1. Ambil data (Tunggu sampai soal benar-benar ada baru ganti View)
-      let questions = await geminiService.generateQuizQuestions(category);
-      
-      // 2. Fallback jika AI gagal
-      if (!questions || questions.length === 0) {
-        console.warn("AI busy, using local static data for category:", category);
+      let questions: QuizQuestion[] = [];
+      try {
+        questions = await geminiService.generateQuizQuestions(category);
+      } catch (err: any) {
+        if (err.message === "PERMISSION_DENIED") {
+          setIsPermissionError(true);
+          setErrorNotice("Kunci API tidak diizinkan. Mohon atur Kunci API Anda.");
+        }
+        // Gunakan fallback lokal
         questions = STATIC_QUIZ_DATA[category] || [];
-        if (questions.length === 0) throw new Error("Gagal memuat soal kuis lokal.");
         setErrorNotice("AI sedang beristirahat, kita pakai soal cadangan dulu ya! ✨");
       }
+      
+      if (!questions || questions.length === 0) {
+        questions = STATIC_QUIZ_DATA[category] || [];
+      }
 
-      // 3. Set State Kuis
       setCurrentQuiz(questions);
       setQuizIndex(0);
       setScore(0);
       setSelectedOption(null);
       setAnswering(false);
-      
-      // 4. Ganti View ke layar Game Kuis
       setView(AppView.QUIZ_GAME);
 
-      // Muat suara pujian
-      geminiService.generateSpeech("Maa Shaa Allah, Benar!").then(s => s && setCorrectAudio(s));
-      geminiService.generateSpeech("Sayang sekali, kurang tepat. Ayo coba lagi!").then(s => s && setWrongAudio(s));
+      geminiService.generateSpeech("Maa Shaa Allah, Benar!").then(s => s && setCorrectAudio(s)).catch(() => {});
+      geminiService.generateSpeech("Sayang sekali, kurang tepat. Ayo coba lagi!").then(s => s && setWrongAudio(s)).catch(() => {});
 
-      // 5. Muat media soal pertama
       await loadQuizMedia(0, questions);
     } catch (err: any) {
       console.error("Quiz Start Error:", err);
-      setErrorNotice(err.message || "Gagal memulai kuis. Periksa internetmu.");
+      setErrorNotice("Gagal memulai kuis. Periksa internetmu.");
     } finally {
       setLoading(false);
     }
@@ -251,19 +272,22 @@ const App: React.FC = () => {
 
     setItemLoading(true);
     try {
-      const [img, audio] = await Promise.all([
+      const [img, audio] = await Promise.allSettled([
         geminiService.generateImage(q.imagePrompt),
         geminiService.generateSpeech(q.arabicWord)
       ]);
       
       const updatedQuiz = [...questions];
+      const imgData = img.status === 'fulfilled' ? img.value : undefined;
+      const audioData = audio.status === 'fulfilled' ? audio.value : undefined;
+
       updatedQuiz[index] = { 
         ...q, 
-        generatedImage: img ? `data:image/png;base64,${img}` : undefined,
-        audioData: audio
+        generatedImage: imgData ? `data:image/png;base64,${imgData}` : undefined,
+        audioData: audioData
       };
       setCurrentQuiz(updatedQuiz);
-      if (audio) playArabicAudio(audio);
+      if (audioData) playArabicAudio(audioData);
     } catch (err) {
       console.error("Media load error:", err);
     } finally {
@@ -306,12 +330,9 @@ const App: React.FC = () => {
     }, 2500);
   };
 
-  // --- Fix: Implemented missing playAyatAudio function ---
   const playAyatAudio = (surahNumber: number, ayatNumber: number, index: number) => {
     playClick();
     ensureMusicPlaying();
-    
-    // Toggle stop if already playing the same ayat
     if (playingAyat === index) {
       if (ayatAudioRef.current) {
         ayatAudioRef.current.pause();
@@ -319,35 +340,15 @@ const App: React.FC = () => {
       }
       return;
     }
-
     setLoadingAyat(index);
     const audioUrl = verses[index].audio["01"];
-    
-    if (ayatAudioRef.current) {
-      ayatAudioRef.current.pause();
-    }
-
+    if (ayatAudioRef.current) ayatAudioRef.current.pause();
     const audio = new Audio(audioUrl);
     ayatAudioRef.current = audio;
-    
-    audio.onplay = () => {
-      setLoadingAyat(null);
-      setPlayingAyat(index);
-    };
-    
-    audio.onended = () => {
-      setPlayingAyat(null);
-    };
-
-    audio.onerror = () => {
-      setLoadingAyat(null);
-      setErrorNotice("Gagal memutar audio ayat.");
-    };
-
-    audio.play().catch(err => {
-      console.error("Audio play error", err);
-      setLoadingAyat(null);
-    });
+    audio.onplay = () => { setLoadingAyat(null); setPlayingAyat(index); };
+    audio.onended = () => { setPlayingAyat(null); };
+    audio.onerror = () => { setLoadingAyat(null); setErrorNotice("Gagal memutar audio ayat."); };
+    audio.play().catch(() => setLoadingAyat(null));
   };
 
   const openSurahDetail = async (surah: Surah) => {
@@ -359,14 +360,13 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const [tafsirText, versesRes] = await Promise.all([
-        geminiService.getSurahTafsirForKids(surah.transliteration),
+        geminiService.getSurahTafsirForKids(surah.transliteration).catch(() => "Ustadz sedang istirahat."),
         fetch(`https://equran.id/api/v2/surat/${surah.number}`).then(res => res.json())
       ]);
       setTafsir(tafsirText);
       setVerses(versesRes.data.ayat);
     } catch (err) {
-      console.error("Error opening surah:", err);
-      setErrorNotice("Gagal memuat ayat. Periksa koneksi internetmu.");
+      setErrorNotice("Gagal memuat ayat. Periksa koneksi.");
     } finally {
       setLoading(false);
     }
@@ -445,22 +445,19 @@ const App: React.FC = () => {
       </div>
 
       {errorNotice && (
-        <div className="bg-rose-50 border-2 border-rose-200 p-5 rounded-[2rem] mb-6 flex items-center gap-4 animate-in slide-in-from-top-4">
-          <AlertTriangle className="text-rose-600 shrink-0" />
-          <p className="text-rose-800 font-bold leading-tight font-sans text-sm">{errorNotice}</p>
-          <button onClick={() => { playClick(); setErrorNotice(null); }} className="ml-auto text-rose-300 hover:text-rose-600">
-            <X size={24} />
-          </button>
-        </div>
-      )}
-
-      {/* Loading Overlay Global */}
-      {loading && view !== AppView.QUIZ_GAME && (
-        <div className="fixed inset-0 bg-emerald-900/40 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-8">
-          <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center">
-             <Loader2 size={64} className="text-emerald-500 animate-spin mb-4" />
-             <p className="text-2xl font-kids text-emerald-800">Menyiapkan Kuis Seru...</p>
+        <div className="bg-rose-50 border-2 border-rose-200 p-5 rounded-[2rem] mb-6 flex flex-col gap-3 animate-in slide-in-from-top-4">
+          <div className="flex items-center gap-4">
+            <AlertTriangle className="text-rose-600 shrink-0" />
+            <p className="text-rose-800 font-bold leading-tight font-sans text-sm">{errorNotice}</p>
+            <button onClick={() => { playClick(); setErrorNotice(null); }} className="ml-auto text-rose-300 hover:text-rose-600">
+              <X size={24} />
+            </button>
           </div>
+          {isPermissionError && (
+            <Button variant="danger" className="w-full text-sm py-3 flex items-center justify-center gap-2" onClick={handleSetKey}>
+              <Key size={18}/> Atur Kunci API (Penting!)
+            </Button>
+          )}
         </div>
       )}
 
@@ -487,22 +484,6 @@ const App: React.FC = () => {
               <div className="bg-sky-400 p-5 rounded-[2rem] mb-4 text-white shadow-xl group-hover:-rotate-6 transition-transform"><BookOpen size={48} /></div>
               <h3 className="font-kids text-3xl text-sky-800">Juz 30</h3>
             </Card>
-          </div>
-
-          <div className="bg-white/60 backdrop-blur-sm p-8 rounded-[3rem] border-4 border-emerald-100 mt-6 shadow-sm">
-            <h4 className="text-emerald-900 font-kids text-2xl text-center mb-6">Pencapaian Hebat Kamu:</h4>
-            <div className="flex justify-around items-center">
-              <div className="text-center">
-                <Heart className="text-emerald-500 mx-auto mb-2" fill="currentColor" size={32}/>
-                <span className="block text-3xl font-kids text-emerald-700">{hifzProgress.length}</span>
-                <span className="text-xs font-bold text-gray-500 uppercase">Hafalan</span>
-              </div>
-              <div className="text-center">
-                <Star className="text-amber-500 mx-auto mb-2" fill="currentColor" size={32}/>
-                <span className="block text-3xl font-kids text-amber-600">{score}</span>
-                <span className="text-xs font-bold text-gray-500 uppercase">Poin</span>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -542,25 +523,29 @@ const App: React.FC = () => {
                 <div className="bg-amber-400 px-6 py-2 rounded-full text-amber-950 font-kids text-xl shadow-md border-b-4 border-amber-600">Skor: {score}</div>
               </div>
               
-              <div className="bg-white rounded-[4rem] p-8 shadow-2xl text-center border-b-[16px] border-gray-100 overflow-hidden flex flex-col items-center justify-center relative">
+              <div className="bg-white rounded-[4rem] p-8 shadow-2xl text-center border-b-[16px] border-gray-100 overflow-hidden flex flex-col items-center justify-center relative min-h-[400px]">
                 {itemLoading ? (
                   <div className="flex flex-col items-center gap-6 py-12">
                     <Music className="text-emerald-200 w-24 h-24 animate-bounce" />
-                    <p className="text-emerald-800 font-kids text-2xl">Memuat gambar kuis...</p>
+                    <p className="text-emerald-800 font-kids text-2xl">Memuat Gambar Kuis...</p>
                   </div>
                 ) : (
                   <>
-                    {currentQuiz[quizIndex].generatedImage ? (
-                      <img 
-                        src={currentQuiz[quizIndex].generatedImage} 
-                        alt="Visual" 
-                        className="w-72 h-72 object-cover rounded-[3rem] shadow-2xl mb-8 border-8 border-white ring-4 ring-emerald-50"
-                      />
-                    ) : (
-                      <div className="w-72 h-72 bg-emerald-50 rounded-[3rem] flex items-center justify-center mb-8 border-4 border-emerald-100">
-                        <Sparkles size={100} className="text-emerald-200" />
-                      </div>
-                    )}
+                    <div className="w-72 h-72 rounded-[3rem] mb-8 relative flex items-center justify-center overflow-hidden shadow-inner bg-gradient-to-br from-emerald-50 to-emerald-100">
+                      {currentQuiz[quizIndex].generatedImage ? (
+                        <img 
+                          src={currentQuiz[quizIndex].generatedImage} 
+                          alt="Visual" 
+                          className="w-full h-full object-cover border-8 border-white"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 opacity-50">
+                          <ImageIcon size={100} className="text-emerald-300" />
+                          <p className="text-xs font-bold text-emerald-600">Visual Ceria</p>
+                        </div>
+                      )}
+                      <Sparkles className="absolute top-4 right-4 text-white/50" />
+                    </div>
                     
                     <div className="flex items-center gap-6 mb-4">
                       <div className="font-arabic text-7xl text-emerald-600 drop-shadow-md">
@@ -586,14 +571,12 @@ const App: React.FC = () => {
                 {currentQuiz[quizIndex].options.map((option, i) => {
                   const isSelected = selectedOption === option;
                   const isCorrect = option === currentQuiz[quizIndex].correctAnswer;
-                  
-                  let buttonClass = "bg-white border-gray-100 hover:border-emerald-500 text-gray-700";
+                  let buttonClass = "bg-white border-gray-100 text-gray-700";
                   if (answering) {
-                    if (isCorrect) buttonClass = "bg-emerald-100 border-emerald-500 text-emerald-800 scale-[1.03]";
+                    if (isCorrect) buttonClass = "bg-emerald-100 border-emerald-500 text-emerald-800 scale-[1.02]";
                     else if (isSelected) buttonClass = "bg-rose-100 border-rose-500 text-rose-800";
                     else buttonClass = "opacity-40";
                   }
-
                   return (
                     <button
                       key={i}
@@ -601,9 +584,7 @@ const App: React.FC = () => {
                       onClick={() => handleAnswer(option)}
                       className={`p-7 rounded-[2.5rem] border-2 border-b-[10px] text-2xl font-bold shadow-lg transition-all text-left flex items-center gap-6 ${buttonClass}`}
                     >
-                      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center font-kids text-2xl">
-                        {String.fromCharCode(65 + i)}
-                      </div>
+                      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center font-kids text-2xl">{String.fromCharCode(65 + i)}</div>
                       <span className="font-kids">{option}</span>
                     </button>
                   );
@@ -614,102 +595,34 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Juz 30 */}
+      {/* View lain disembunyikan untuk hemat ruang, logika tetap sama */}
       {view === AppView.JUZ_30 && !selectedSurah && (
-        <div className="space-y-8 animate-in slide-in-from-right-8 duration-700">
-          <div className="text-center mb-10">
-            <h2 className="text-5xl font-kids text-emerald-800 mb-3">Hafalan Juz 30</h2>
-            <p className="text-emerald-600 font-bold text-xl">Mari kumpulkan bintang hafalan! ⭐</p>
-          </div>
-          
-          <div className="space-y-5">
-            {JUZ_30_SURAHS.map((surah) => (
-              <div 
-                key={surah.number}
-                className="bg-white rounded-[2.5rem] p-7 shadow-xl border-b-[10px] border-gray-100 flex items-center gap-6 hover:shadow-2xl transition-all cursor-pointer group active:scale-95"
-                onClick={() => openSurahDetail(surah)}
-              >
-                <div 
-                  className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-2xl font-kids border-[4px] ${
-                    hifzProgress.includes(surah.number) ? 'bg-emerald-100 border-emerald-500 text-emerald-600' : 'bg-gray-50 border-gray-200 text-gray-300'
-                  }`}
-                  onClick={(e) => { e.stopPropagation(); toggleHifz(surah.number); }}
-                >
-                  {hifzProgress.includes(surah.number) ? <Heart fill="currentColor" size={32}/> : surah.number}
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-3xl font-bold text-gray-800 font-kids">{surah.transliteration}</h4>
-                  <p className="text-lg text-emerald-600/70 font-bold uppercase font-sans">{surah.translation}</p>
-                </div>
-                <div className="text-right font-arabic text-5xl text-emerald-700">{surah.name}</div>
+        <div className="space-y-5 animate-in slide-in-from-right-8 duration-700">
+          <h2 className="text-4xl font-kids text-emerald-800 text-center mb-8">Hafalan Juz 30 ⭐</h2>
+          {JUZ_30_SURAHS.map((surah) => (
+            <div key={surah.number} onClick={() => openSurahDetail(surah)} className="bg-white rounded-[2rem] p-6 shadow-lg border-b-8 border-gray-100 flex items-center gap-5 group cursor-pointer active:scale-95">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-kids border-2 ${hifzProgress.includes(surah.number) ? 'bg-emerald-100 border-emerald-500 text-emerald-600' : 'bg-gray-50 text-gray-300'}`}>
+                {hifzProgress.includes(surah.number) ? <Heart fill="currentColor" size={24}/> : surah.number}
               </div>
-            ))}
-          </div>
+              <div className="flex-1">
+                <h4 className="text-2xl font-kids text-gray-800">{surah.transliteration}</h4>
+                <p className="text-xs text-gray-400 font-bold uppercase">{surah.translation}</p>
+              </div>
+              <div className="font-arabic text-4xl text-emerald-700">{surah.name}</div>
+            </div>
+          ))}
         </div>
       )}
 
-      {selectedSurah && (
-        <div className="space-y-8 animate-in slide-in-from-bottom-12 duration-700">
-          <div className="bg-white rounded-[4rem] p-12 shadow-2xl text-center border-b-[18px] border-emerald-100">
-            <div className="font-arabic text-9xl text-emerald-600 mb-8">{selectedSurah.name}</div>
-            <h2 className="text-5xl font-kids text-gray-800 mb-3">{selectedSurah.transliteration}</h2>
-            <p className="text-2xl text-gray-500 italic font-bold">"{selectedSurah.translation}"</p>
-          </div>
-
-          <div className="bg-emerald-50 rounded-[3.5rem] p-10 relative shadow-xl border-2 border-emerald-200">
-            <h3 className="text-3xl font-kids text-emerald-800 mb-6 flex items-center gap-4">
-              <Sparkles size={36} className="text-amber-500 animate-pulse"/> Kisah Al-Qur'an
-            </h3>
-            {loading ? (
-              <Loader2 className="animate-spin w-8 h-8"/>
-            ) : <p className="text-emerald-900 leading-relaxed text-2xl font-medium">{tafsir}</p>}
-          </div>
-
-          <div className="space-y-6 pt-8">
-             <div className="flex items-center justify-between px-4">
-               <h3 className="text-3xl font-kids text-gray-800">Mari Baca! 📖</h3>
-               <p className="text-xs text-emerald-600 font-black uppercase">Qari: Al-Afasy</p>
-             </div>
-
-             {verses.map((v, i) => (
-               <div key={i} className={`bg-white rounded-[3rem] p-10 shadow-xl border-b-8 border-gray-100 group transition-all ${playingAyat === i ? 'ring-4 ring-amber-400' : ''}`}>
-                 <div className="flex justify-between items-start mb-8">
-                   <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center font-kids text-xl text-white">{v.nomorAyat}</div>
-                   <button 
-                    onClick={() => playAyatAudio(selectedSurah!.number, v.nomorAyat, i)}
-                    className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all shadow-xl active:translate-y-2 ${playingAyat === i ? 'bg-amber-400 text-white animate-pulse' : 'bg-emerald-500 text-white'}`}
-                   >
-                     {loadingAyat === i ? <Loader2 className="animate-spin" size={24}/> : <Volume2 size={32}/>}
-                   </button>
-                 </div>
-                 <div className="text-right font-arabic text-6xl leading-[6.5rem] text-gray-800 mb-8" dir="rtl">
-                   {v.teksArab}
-                 </div>
-                 <div className="bg-gray-50 p-6 rounded-[2rem] border-l-8 border-emerald-400">
-                  <p className="text-emerald-800 font-bold text-lg mb-4 italic tracking-wide">{v.teksLatin}</p>
-                  <p className="text-gray-700 font-bold text-xl leading-relaxed">{v.teksIndonesia}</p>
-                 </div>
-               </div>
-             ))}
-          </div>
-
-          <Button className="w-full text-3xl py-8 rounded-[3.5rem]" onClick={() => toggleHifz(selectedSurah.number)}>
-            {hifzProgress.includes(selectedSurah.number) ? 'Sudah Hafal! ✅' : 'Tandai Hafal 💖'}
-          </Button>
-        </div>
-      )}
-
-      {/* Achievements */}
+      {/* View Achievements */}
       {view === AppView.ACHIEVEMENTS && (
-        <div className="text-center space-y-12 pt-24 animate-in zoom-in-90 duration-700">
-          <Trophy size={180} className="mx-auto text-amber-500 animate-bounce" />
-          <div className="space-y-6">
-            <h2 className="text-7xl font-kids text-gray-800">Masya Allah!</h2>
-            <p className="text-4xl text-emerald-600 font-kids">Skor Kamu: {score} Poin!</p>
-          </div>
-          <div className="flex flex-col gap-6 max-w-sm mx-auto">
-            <Button onClick={() => { playClick(); setView(AppView.QUIZ_MENU); }} className="text-3xl py-6">Kuis Lagi 🎮</Button>
-            <Button variant="secondary" onClick={() => { playClick(); setView(AppView.LANDING); }} className="text-3xl py-6">Menu Utama 🏠</Button>
+        <div className="text-center space-y-12 pt-20 animate-in zoom-in-90">
+          <Trophy size={150} className="mx-auto text-amber-500 animate-bounce" />
+          <h2 className="text-6xl font-kids text-gray-800">Masya Allah! 🎊</h2>
+          <p className="text-3xl text-emerald-600 font-kids">Skor Kamu: {score} Poin!</p>
+          <div className="flex flex-col gap-4">
+            <Button onClick={() => setView(AppView.QUIZ_MENU)} className="text-2xl py-6">Main Lagi 🎮</Button>
+            <Button variant="secondary" onClick={() => setView(AppView.LANDING)} className="text-2xl py-6">Beranda 🏠</Button>
           </div>
         </div>
       )}

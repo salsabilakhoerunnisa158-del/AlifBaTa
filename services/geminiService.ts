@@ -9,34 +9,39 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
   try {
     return await fn();
   } catch (error: any) {
-    const isQuotaError = error?.message?.includes('429') || error?.status === 429 || error?.code === 429;
+    const errorMsg = error?.message?.toLowerCase() || "";
+    const isQuotaError = errorMsg.includes('429') || error?.status === 429;
+    const isPermissionError = errorMsg.includes('permission') || errorMsg.includes('denied');
+    
     if (retries > 0 && isQuotaError) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
     }
+    
+    // Jika permission denied, jangan retry, lempar error spesifik
+    if (isPermissionError) {
+      throw new Error("PERMISSION_DENIED");
+    }
+    
     throw error;
   }
 }
 
 export const geminiService = {
-  // Always use a new instance with the current API key
-  getAI() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
-  },
-
   async generateQuizQuestions(category: string): Promise<QuizQuestion[]> {
     return withRetry(async () => {
-      const ai = this.getAI();
+      // Buat instans baru tepat sebelum digunakan
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Generate exactly 10 multiple-choice quiz questions for children about Arabic vocabulary in the category: "${category}".
 Return the response in a strictly valid JSON array of objects format.
 Each object must have:
-- "question": (string) "Apa bahasa Arabnya [Indonesian Word]?" or similar simple question in Indonesian.
+- "question": (string) "Apa bahasa Arabnya [Indonesian Word]?"
 - "arabicWord": (string) The word in Arabic script with harakat.
-- "options": (array of 4 strings) 1 correct and 3 wrong options in Arabic transliteration (Latin).
-- "correctAnswer": (string) The correct transliteration from options.
-- "imagePrompt": (string) A simple English visual description like "a cute cartoon [word]".`,
+- "options": (array of 4 strings) in Latin.
+- "correctAnswer": (string) The correct Latin transliteration.
+- "imagePrompt": (string) A simple visual description.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -60,19 +65,16 @@ Each object must have:
       if (!text) return [];
       const parsed = JSON.parse(text);
       return Array.isArray(parsed) ? parsed : [];
-    }).catch(err => {
-      console.error("AI quiz generation failed:", err);
-      return []; // Return empty to trigger fallback in App.tsx
     });
   },
 
   async generateImage(prompt: string): Promise<string | undefined> {
     return withRetry(async () => {
-      const ai = this.getAI();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `Cute vibrant colorful 3D clay style cartoon illustration for children, centered, solid pastel background: ${prompt}` }],
+          parts: [{ text: `Cute vibrant 3D clay cartoon for kids, solid background: ${prompt}` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -81,18 +83,15 @@ Each object must have:
       
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
-    }).catch(err => {
-      console.error("Image generation failed:", err);
-      return undefined;
     });
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
     return withRetry(async () => {
-      const ai = this.getAI();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan sangat jelas dan perlahan untuk anak-anak: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan jelas: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -104,23 +103,17 @@ Each object must have:
       });
       
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    }).catch(err => {
-      console.error("Speech generation failed:", err);
-      return undefined;
     });
   },
 
   async getSurahTafsirForKids(surahName: string): Promise<string> {
     return withRetry(async () => {
-      const ai = this.getAI();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Ceritakan kisah atau makna Surah ${surahName} (Juz 30) untuk anak-anak. Gunakan bahasa yang sangat sederhana, penuh kasih, dan ceria. Maksimal 150 kata.`,
+        contents: `Kisah Surah ${surahName} untuk anak (maks 100 kata).`,
       });
-      return response.text || "Cerita indah tentang surah ini akan segera hadir!";
-    }).catch(err => {
-      console.error("Tafsir fetch error:", err);
-      return "Ustadz AI sedang beristirahat sebentar. Yuk baca Al-Qur'an dulu!";
+      return response.text || "Cerita indah segera hadir!";
     });
   }
 };
