@@ -2,25 +2,24 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { QuizQuestion } from "../types";
 
-const RETRY_DELAY = 1500;
-const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000;
+const MAX_RETRIES = 1;
 
 async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay = RETRY_DELAY): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
     const errorMsg = error?.message?.toLowerCase() || "";
-    const isQuotaError = errorMsg.includes('429') || error?.status === 429;
-    const isPermissionError = errorMsg.includes('permission') || errorMsg.includes('denied');
+    const isPermissionError = errorMsg.includes('permission') || errorMsg.includes('denied') || errorMsg.includes('not found');
     
-    if (retries > 0 && isQuotaError) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return withRetry(fn, retries - 1, delay * 2);
-    }
-    
-    // Jika permission denied, jangan retry, lempar error spesifik
+    // Jika permission denied atau model tidak ditemukan, jangan retry sama sekali
     if (isPermissionError) {
       throw new Error("PERMISSION_DENIED");
+    }
+
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return withRetry(fn, retries - 1, delay * 2);
     }
     
     throw error;
@@ -30,7 +29,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
 export const geminiService = {
   async generateQuizQuestions(category: string): Promise<QuizQuestion[]> {
     return withRetry(async () => {
-      // Buat instans baru tepat sebelum digunakan
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -69,41 +67,50 @@ Each object must have:
   },
 
   async generateImage(prompt: string): Promise<string | undefined> {
-    return withRetry(async () => {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [{ text: `Cute vibrant 3D clay cartoon for kids, solid background: ${prompt}` }],
-        },
-        config: {
-          imageConfig: { aspectRatio: "1:1" }
-        }
-      });
-      
-      const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-      return part?.inlineData?.data;
-    });
+    try {
+      return await withRetry(async () => {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: {
+            parts: [{ text: `Cute vibrant 3D clay cartoon for kids, solid background: ${prompt}` }],
+          },
+          config: {
+            imageConfig: { aspectRatio: "1:1" }
+          }
+        });
+        
+        const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+        return part?.inlineData?.data;
+      }, 0); // No retries for images to speed up fallback
+    } catch (err) {
+      console.warn("Image generation failed:", err);
+      return undefined;
+    }
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
-    return withRetry(async () => {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan jelas: ${text}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' }, 
+    try {
+      return await withRetry(async () => {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-preview-tts",
+          contents: [{ parts: [{ text: `Ucapkan jelas: ${text}` }] }],
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Kore' }, 
+              },
             },
           },
-        },
-      });
-      
-      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    });
+        });
+        
+        return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      }, 0);
+    } catch (err) {
+      return undefined;
+    }
   },
 
   async getSurahTafsirForKids(surahName: string): Promise<string> {
