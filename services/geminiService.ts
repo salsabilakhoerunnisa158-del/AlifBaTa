@@ -10,10 +10,16 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
     return await fn();
   } catch (error: any) {
     const errorMsg = error?.message?.toLowerCase() || "";
-    const isPermissionError = errorMsg.includes('permission') || errorMsg.includes('denied') || errorMsg.includes('not found');
+    // Identifikasi error spesifik yang tidak butuh retry
+    const isPermissionError = 
+      errorMsg.includes('permission') || 
+      errorMsg.includes('denied') || 
+      errorMsg.includes('not found') || 
+      errorMsg.includes('403') || 
+      errorMsg.includes('404');
     
-    // Jika permission denied atau model tidak ditemukan, jangan retry sama sekali
     if (isPermissionError) {
+      console.warn("Gemini API Error (No Retry):", errorMsg);
       throw new Error("PERMISSION_DENIED");
     }
 
@@ -41,6 +47,7 @@ Each object must have:
 - "correctAnswer": (string) The correct Latin transliteration.
 - "imagePrompt": (string) A simple visual description.`,
         config: {
+          thinkingConfig: { thinkingBudget: 0 }, // Cepat tanpa deep reasoning
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -68,46 +75,43 @@ Each object must have:
 
   async generateImage(prompt: string): Promise<string | undefined> {
     try {
-      return await withRetry(async () => {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: {
-            parts: [{ text: `Cute vibrant 3D clay cartoon for kids, solid background: ${prompt}` }],
-          },
-          config: {
-            imageConfig: { aspectRatio: "1:1" }
-          }
-        });
-        
-        const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-        return part?.inlineData?.data;
-      }, 0); // No retries for images to speed up fallback
+      // Untuk gambar kita tidak pakai retry agar UI cepat memberikan feedback fallback
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [{ text: `Cute vibrant 3D clay cartoon for kids, solid background, high quality: ${prompt}` }],
+        },
+        config: {
+          imageConfig: { aspectRatio: "1:1" }
+        }
+      });
+      
+      const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+      return part?.inlineData?.data;
     } catch (err) {
-      console.warn("Image generation failed:", err);
+      console.warn("Image API failing, app will use category icon fallback.");
       return undefined;
     }
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
     try {
-      return await withRetry(async () => {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: `Ucapkan jelas: ${text}` }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Kore' }, 
-              },
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Sebutkan dengan perlahan dan ceria: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' }, 
             },
           },
-        });
-        
-        return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      }, 0);
+        },
+      });
+      
+      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     } catch (err) {
       return undefined;
     }

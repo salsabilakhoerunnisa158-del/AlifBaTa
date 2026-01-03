@@ -49,7 +49,7 @@ const BackgroundDecor: React.FC = () => (
 
 // --- Helper to get Category Icon ---
 const CategoryIcon: React.FC<{ category: string; size?: number }> = ({ category, size = 120 }) => {
-  const props = { size, className: "text-white drop-shadow-lg animate-pulse" };
+  const props = { size, className: "text-white drop-shadow-lg" };
   switch (category) {
     case 'Hewan Lucu': return <Dog {...props} />;
     case 'Buah Segar': return <Apple {...props} />;
@@ -63,13 +63,13 @@ const CategoryIcon: React.FC<{ category: string; size?: number }> = ({ category,
 
 const getCategoryColors = (category: string) => {
   switch (category) {
-    case 'Hewan Lucu': return "from-rose-400 to-rose-500";
-    case 'Buah Segar': return "from-amber-400 to-amber-500";
-    case 'Benda di Rumah': return "from-emerald-400 to-emerald-500";
-    case 'Anggota Keluarga': return "from-sky-400 to-sky-500";
-    case 'Warna-warni': return "from-purple-400 to-purple-500";
-    case 'Angka Arab': return "from-orange-400 to-orange-500";
-    default: return "from-emerald-400 to-emerald-500";
+    case 'Hewan Lucu': return "from-rose-400 to-rose-500 shadow-rose-200";
+    case 'Buah Segar': return "from-amber-400 to-amber-500 shadow-amber-200";
+    case 'Benda di Rumah': return "from-emerald-400 to-emerald-500 shadow-emerald-200";
+    case 'Anggota Keluarga': return "from-sky-400 to-sky-500 shadow-sky-200";
+    case 'Warna-warni': return "from-purple-400 to-purple-500 shadow-purple-200";
+    case 'Angka Arab': return "from-orange-400 to-orange-500 shadow-orange-200";
+    default: return "from-emerald-400 to-emerald-500 shadow-emerald-200";
   }
 };
 
@@ -244,6 +244,7 @@ const App: React.FC = () => {
 
   const playArabicAudio = async (base64Audio: string) => {
     ensureMusicPlaying();
+    if (!base64Audio) return;
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -277,10 +278,11 @@ const App: React.FC = () => {
       } catch (err: any) {
         if (err.message === "PERMISSION_DENIED") {
           setIsPermissionError(true);
-          setErrorNotice("Izin Kunci API bermasalah. Menggunakan soal cadangan.");
+          setErrorNotice("Izin Kunci API tidak lengkap. Menggunakan soal cadangan.");
+        } else {
+          setErrorNotice("Gemini sedang sibuk. Pakai soal cadangan dulu ya! ✨");
         }
         questions = STATIC_QUIZ_DATA[category] || [];
-        if (!errorNotice) setErrorNotice("AI sedang istirahat sebentar ya! ✨");
       }
       
       if (!questions || questions.length === 0) {
@@ -294,6 +296,7 @@ const App: React.FC = () => {
       setAnswering(false);
       setView(AppView.QUIZ_GAME);
 
+      // Pre-generate speech for feedback
       geminiService.generateSpeech("Maa Shaa Allah, Benar!").then(s => s && setCorrectAudio(s)).catch(() => {});
       geminiService.generateSpeech("Sayang sekali, kurang tepat. Ayo coba lagi!").then(s => s && setWrongAudio(s)).catch(() => {});
 
@@ -311,32 +314,37 @@ const App: React.FC = () => {
 
     setItemLoading(true);
     
-    // Gunakan timeout agar jika API lemot, aplikasi tidak stuck "Memuat"
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000));
+    // Safety timeout: Jangan biarkan user menunggu lebih dari 4 detik
+    const timer = setTimeout(() => {
+      console.warn("Media generation timed out.");
+      setItemLoading(false);
+    }, 4500);
 
     try {
-      const results = await Promise.race([
-        Promise.allSettled([
-          geminiService.generateImage(q.imagePrompt),
-          geminiService.generateSpeech(q.arabicWord)
-        ]),
-        timeoutPromise
-      ]) as any;
+      const results = await Promise.allSettled([
+        geminiService.generateImage(q.imagePrompt),
+        geminiService.generateSpeech(q.arabicWord)
+      ]);
       
-      const [img, audio] = results;
+      clearTimeout(timer);
+
       const updatedQuiz = [...questions];
-      const imgData = img.status === 'fulfilled' ? img.value : undefined;
-      const audioData = audio.status === 'fulfilled' ? audio.value : undefined;
+      const imgRes = results[0];
+      const audioRes = results[1];
+
+      const imgData = imgRes.status === 'fulfilled' ? imgRes.value : undefined;
+      const audioData = audioRes.status === 'fulfilled' ? audioRes.value : undefined;
 
       updatedQuiz[index] = { 
         ...q, 
         generatedImage: imgData ? `data:image/png;base64,${imgData}` : undefined,
         audioData: audioData
       };
+      
       setCurrentQuiz(updatedQuiz);
       if (audioData) playArabicAudio(audioData);
     } catch (err) {
-      console.warn("Media load error or timeout, showing fallback.");
+      console.warn("Handled error during media load:", err);
     } finally {
       setItemLoading(false);
     }
@@ -355,13 +363,13 @@ const App: React.FC = () => {
         correctSfxRef.current.currentTime = 0;
         correctSfxRef.current.play().catch(() => {});
       }
-      if (correctAudio) setTimeout(() => playArabicAudio(correctAudio), 500);
+      if (correctAudio) setTimeout(() => playArabicAudio(correctAudio), 400);
     } else {
       if (wrongSfxRef.current) {
         wrongSfxRef.current.currentTime = 0;
         wrongSfxRef.current.play().catch(() => {});
       }
-      if (wrongAudio) setTimeout(() => playArabicAudio(wrongAudio), 500);
+      if (wrongAudio) setTimeout(() => playArabicAudio(wrongAudio), 400);
     }
 
     setTimeout(() => {
@@ -374,7 +382,7 @@ const App: React.FC = () => {
       } else {
         setView(AppView.ACHIEVEMENTS);
       }
-    }, 2500);
+    }, 2200);
   };
 
   const playAyatAudio = (surahNumber: number, ayatNumber: number, index: number) => {
@@ -407,7 +415,7 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const [tafsirText, versesRes] = await Promise.all([
-        geminiService.getSurahTafsirForKids(surah.transliteration).catch(() => "Ustadz sedang istirahat."),
+        geminiService.getSurahTafsirForKids(surah.transliteration).catch(() => "Ustadz sedang istirahat sebentar."),
         fetch(`https://equran.id/api/v2/surat/${surah.number}`).then(res => res.json())
       ]);
       setTafsir(tafsirText);
@@ -456,7 +464,7 @@ const App: React.FC = () => {
       <BackgroundDecor />
       
       {/* Navbar */}
-      <div className="flex items-center justify-between mb-10 sticky top-4 z-50 bg-white/70 backdrop-blur-xl p-4 rounded-[3rem] border-2 border-white/50 shadow-2xl shadow-emerald-500/10">
+      <div className="flex items-center justify-between mb-10 sticky top-4 z-50 bg-white/80 backdrop-blur-xl p-4 rounded-[3rem] border-2 border-white/50 shadow-2xl shadow-emerald-500/10">
         <div className="flex items-center gap-4">
           <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-200 cursor-pointer hover:rotate-12 transition-transform" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); }}>
             <Sparkles className="text-white w-7 h-7" />
@@ -614,20 +622,24 @@ const App: React.FC = () => {
                 </div>
               </div>
               
-              <div className="bg-white rounded-[4rem] p-10 shadow-2xl text-center border-b-[20px] border-gray-100 overflow-hidden flex flex-col items-center justify-center relative min-h-[500px]">
+              <div className="bg-white rounded-[4rem] p-8 shadow-2xl text-center border-b-[20px] border-gray-100 overflow-hidden relative min-h-[500px] flex flex-col">
                 {itemLoading ? (
-                  <div className="flex flex-col items-center gap-8 py-20">
-                    <Music className="text-emerald-400 w-32 h-32 animate-bounce" />
+                  <div className="flex flex-col items-center justify-center gap-8 py-24 flex-1">
+                    <div className="relative">
+                      <Music className="text-emerald-400 w-32 h-32 animate-bounce" />
+                      <Sparkles className="absolute -top-4 -right-4 text-amber-400 animate-pulse" size={32}/>
+                    </div>
                     <p className="text-emerald-900 font-kids text-3xl">Mencari Visual Seru... ✨</p>
                   </div>
                 ) : (
-                  <>
-                    <div className={`w-80 h-80 rounded-[4rem] mb-10 relative flex items-center justify-center overflow-hidden shadow-2xl bg-gradient-to-br ${getCategoryColors(currentCategory)} border-8 border-white p-2`}>
+                  <div className="flex flex-col items-center flex-1 py-4">
+                    {/* Image / Fallback Section */}
+                    <div className={`w-72 h-72 rounded-[3.5rem] mb-6 relative flex items-center justify-center overflow-hidden shadow-2xl bg-gradient-to-br ${getCategoryColors(currentCategory)} border-8 border-white p-2 shrink-0`}>
                       {currentQuiz[quizIndex].generatedImage ? (
                         <img 
                           src={currentQuiz[quizIndex].generatedImage} 
                           alt="Visual" 
-                          className="w-full h-full object-cover rounded-[3rem]"
+                          className="w-full h-full object-cover rounded-[2.5rem]"
                         />
                       ) : (
                         <div className="flex flex-col items-center gap-4">
@@ -635,36 +647,38 @@ const App: React.FC = () => {
                           <p className="text-sm font-black text-white/70 uppercase tracking-widest">{currentCategory}</p>
                         </div>
                       )}
-                      <div className="absolute bottom-4 right-4 bg-white/80 p-3 rounded-2xl backdrop-blur-sm"><Sparkles className="text-emerald-400" /></div>
+                      <div className="absolute bottom-4 right-4 bg-white/80 p-2.5 rounded-2xl backdrop-blur-sm"><Sparkles size={20} className="text-emerald-400" /></div>
                     </div>
                     
-                    <div className="flex items-center gap-8 mb-6">
-                      <div className="font-arabic text-8xl text-emerald-600 drop-shadow-xl select-none">
+                    {/* Arabic Text Section */}
+                    <div className="flex items-center justify-center gap-6 mb-4 w-full h-24">
+                      <div className="font-arabic text-7xl text-emerald-600 drop-shadow-xl select-none leading-none">
                         {currentQuiz[quizIndex].arabicWord}
                       </div>
                       <button 
                         onClick={() => playArabicAudio(currentQuiz[quizIndex].audioData!)}
                         disabled={!currentQuiz[quizIndex].audioData}
-                        className={`w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-[0_10px_0_rgb(5,150,105)] active:translate-y-2 active:shadow-none transition-all ${!currentQuiz[quizIndex].audioData ? 'bg-gray-200 shadow-none opacity-50' : 'bg-emerald-400 hover:bg-emerald-500'}`}
+                        className={`w-16 h-16 rounded-3xl flex items-center justify-center text-white shadow-[0_8px_0_rgb(5,150,105)] active:translate-y-1 active:shadow-none transition-all ${!currentQuiz[quizIndex].audioData ? 'bg-gray-200 shadow-none opacity-50' : 'bg-emerald-400 hover:bg-emerald-500'}`}
                       >
-                        <Volume2 size={44}/>
+                        <Volume2 size={32}/>
                       </button>
                     </div>
                     
-                    <h3 className="text-4xl font-kids text-gray-800 px-10 leading-snug">
+                    {/* Question Section */}
+                    <h3 className="text-3xl font-kids text-gray-800 px-6 leading-tight flex-1 flex items-center justify-center">
                       {currentQuiz[quizIndex].question}
                     </h3>
-                  </>
+                  </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 gap-6 pt-8">
+              <div className="grid grid-cols-1 gap-5 pt-4">
                 {currentQuiz[quizIndex].options.map((option, i) => {
                   const isSelected = selectedOption === option;
                   const isCorrect = option === currentQuiz[quizIndex].correctAnswer;
                   let buttonClass = "bg-white border-gray-100 text-gray-700";
                   if (answering) {
-                    if (isCorrect) buttonClass = "bg-emerald-400 border-emerald-600 text-white scale-[1.05] shadow-emerald-200";
+                    if (isCorrect) buttonClass = "bg-emerald-400 border-emerald-600 text-white scale-[1.03] shadow-emerald-200 z-10";
                     else if (isSelected) buttonClass = "bg-rose-400 border-rose-600 text-white";
                     else buttonClass = "opacity-30 scale-95";
                   }
@@ -673,12 +687,12 @@ const App: React.FC = () => {
                       key={i}
                       disabled={itemLoading || answering}
                       onClick={() => handleAnswer(option)}
-                      className={`p-8 rounded-[3rem] border-2 border-b-[12px] text-3xl font-kids shadow-2xl transition-all text-left flex items-center gap-8 ${buttonClass}`}
+                      className={`p-6 rounded-[2.5rem] border-2 border-b-[10px] text-2xl font-kids shadow-xl transition-all text-left flex items-center gap-6 ${buttonClass}`}
                     >
-                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-kids shadow-inner ${answering && isCorrect ? 'bg-white/20' : 'bg-gray-50'}`}>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-kids shadow-inner ${answering && isCorrect ? 'bg-white/20' : 'bg-gray-50'}`}>
                         {String.fromCharCode(65 + i)}
                       </div>
-                      <span>{option}</span>
+                      <span className="truncate">{option}</span>
                     </button>
                   );
                 })}
@@ -688,7 +702,38 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Achievements & Surah views remain same as they don't depend on image generation */}
+      {/* View lainnya tetap sama karena sudah stabil */}
+      {view === AppView.JUZ_30 && !selectedSurah && (
+        <div className="space-y-6 animate-in slide-in-from-right-8 duration-700">
+          <div className="bg-sky-400 rounded-[3.5rem] p-12 text-white shadow-2xl mb-12 relative overflow-hidden border-b-[16px] border-sky-700/30">
+             <div className="absolute top-0 right-0 p-8 opacity-20 transform translate-x-4 -translate-y-4">
+                <Moon size={150} fill="currentColor" />
+              </div>
+             <h2 className="text-5xl font-kids mb-2 drop-shadow-md">Hafalan Juz 30 ⭐</h2>
+             <p className="text-sky-50 font-bold text-xl opacity-90 font-sans">Semangat menghafal Al-Qur'an!</p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-5">
+            {JUZ_30_SURAHS.map((surah) => (
+              <div 
+                key={surah.number} 
+                onClick={() => openSurahDetail(surah)} 
+                className="bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-gray-100 flex items-center gap-6 group cursor-pointer active:translate-y-2 active:border-b-[2px] transition-all"
+              >
+                <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-2xl font-kids border-4 transition-colors ${hifzProgress.includes(surah.number) ? 'bg-emerald-400 border-emerald-500 text-white' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
+                  {hifzProgress.includes(surah.number) ? <Heart fill="currentColor" size={32}/> : surah.number}
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-3xl font-kids text-gray-800 group-hover:text-sky-500 transition-colors">{surah.transliteration}</h4>
+                  <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">{surah.translation}</p>
+                </div>
+                <div className="font-arabic text-5xl text-emerald-600 drop-shadow-sm">{surah.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === AppView.ACHIEVEMENTS && (
         <div className="text-center space-y-16 pt-32 animate-in zoom-in-90 duration-700">
           <div className="relative inline-block">
