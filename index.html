@@ -23,18 +23,51 @@
     <style>
         body {
             font-family: 'Quicksand', sans-serif;
-            background-color: #F0FDF4;
+            background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 50%, #F5F3FF 100%);
             margin: 0;
             padding: 0;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
+            min-height: 100vh;
         }
         .font-kids { font-family: 'Fredoka One', cursive; }
         .font-arabic { font-family: 'Amiri', serif; }
         
+        .floating {
+            animation: floating 3s ease-in-out infinite;
+        }
+        @keyframes floating {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .star-blink {
+            animation: blink 2s ease-in-out infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, #10b981, #3b82f6, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb { background: #10b981; border-radius: 10px; }
+        
+        .btn-chunky {
+            box-shadow: 0 8px 0 rgba(0,0,0,0.1);
+            transition: all 0.1s ease;
+        }
+        .btn-chunky:active {
+            transform: translateY(4px);
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+        }
     </style>
 <script type="importmap">
 {
@@ -52,16 +85,5 @@
 <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(reg => {
-            console.log('SW terdaftar di scope:', reg.scope);
-          }).catch(err => {
-            console.log('SW pendaftaran gagal:', err);
-          });
-        });
-      }
-    </script>
 </body>
 </html>
