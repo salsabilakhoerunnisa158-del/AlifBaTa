@@ -9,31 +9,10 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
   try {
     return await fn();
   } catch (error: any) {
-    const errorMsg = error?.message || "";
-    const errorMsgLower = errorMsg.toLowerCase();
-    
-    // Deteksi masalah API Key / Project
-    const isEntityNotFound = errorMsgLower.includes('requested entity was not found');
-    const isPermissionError = 
-      errorMsgLower.includes('permission') || 
-      errorMsgLower.includes('denied') || 
-      errorMsgLower.includes('403') || 
-      errorMsgLower.includes('404') ||
-      errorMsgLower.includes('api_key_invalid');
-    
-    if (isEntityNotFound) {
-      throw new Error("ENTITY_NOT_FOUND");
-    }
-
-    if (isPermissionError) {
-      throw new Error("PERMISSION_DENIED");
-    }
-
     if (retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry(fn, retries - 1, delay * 2);
     }
-    
     throw error;
   }
 }
@@ -72,23 +51,22 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
   },
 
   async generateImage(prompt: string): Promise<string | undefined> {
-    // Mencoba model Pro terlebih dahulu, jika gagal (misal: bukan paid key), biarkan UI menggunakan fallback icon
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
+        model: 'gemini-2.5-flash-image', // Menggunakan model flash agar tidak perlu pop-up key
         contents: {
-          parts: [{ text: `Cute 3D cartoon style for kids: ${prompt}. White background.` }],
+          parts: [{ text: `Cute 3D children illustration, vibrant colors: ${prompt}. White background.` }],
         },
         config: {
-          imageConfig: { aspectRatio: "1:1", imageSize: "1K" }
+          imageConfig: { aspectRatio: "1:1" }
         }
       });
       
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
-      console.warn("Image generation failed, using fallback icon.");
+      console.warn("Image generation failed", e);
       return undefined; 
     }
   },
@@ -98,7 +76,7 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan jelas dan ceria: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan suara ceria: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {

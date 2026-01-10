@@ -21,19 +21,14 @@ import {
   Heart,
   PlayCircle,
   Star,
-  Key,
   Image as ImageIcon,
   Cloud,
-  Moon,
-  Sun,
   Dog,
   Apple,
   Home,
   Users,
   Palette,
-  Hash,
-  ExternalLink,
-  RefreshCw
+  Hash
 } from 'lucide-react';
 
 // --- Decorative Components ---
@@ -121,7 +116,6 @@ const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secon
 const App: React.FC = () => {
   const [view, setView] = useState<AppViewType>(AppView.LANDING);
   const [hasStarted, setHasStarted] = useState(false);
-  const [showKeyPicker, setShowKeyPicker] = useState(false);
   
   const [selectedSurah, setSelectedSurah] = useState<Surah | null>(null);
   const [selectedPrayer, setSelectedPrayer] = useState<DailyPrayer | null>(null);
@@ -140,7 +134,6 @@ const App: React.FC = () => {
   const [answering, setAnswering] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
-  const [isPermissionError, setIsPermissionError] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [playingAyat, setPlayingAyat] = useState<number | null>(null);
   const [loadingAyat, setLoadingAyat] = useState<number | null>(null);
@@ -175,26 +168,10 @@ const App: React.FC = () => {
 
   const playClick = () => { if (clickAudioRef.current) { clickAudioRef.current.currentTime = 0; clickAudioRef.current.play().catch(() => {}); } };
 
-  const handleStartApp = async () => {
+  const handleStartApp = () => {
     playClick();
-    const hasKey = await (window as any).aistudio?.hasSelectedApiKey();
-    if (!hasKey) { setShowKeyPicker(true); return; }
     setHasStarted(true);
     if (bgMusicRef.current && !isMuted) bgMusicRef.current.play().catch(() => {});
-  };
-
-  const handleSetKey = async () => {
-    playClick();
-    try {
-      if (typeof (window as any).aistudio?.openSelectKey === 'function') {
-        await (window as any).aistudio.openSelectKey();
-        setShowKeyPicker(false);
-        setHasStarted(true);
-        setErrorNotice(null);
-        setIsPermissionError(false);
-        if (bgMusicRef.current && !isMuted) bgMusicRef.current.play().catch(() => {});
-      }
-    } catch (e) {}
   };
 
   const playArabicAudio = async (base64Audio: string) => {
@@ -211,23 +188,12 @@ const App: React.FC = () => {
     } catch (err) {}
   };
 
-  const handleError = (err: any) => {
-    const msg = err.message || "";
-    if (msg === "PERMISSION_DENIED" || msg === "ENTITY_NOT_FOUND") {
-      setIsPermissionError(true);
-      setErrorNotice(msg === "ENTITY_NOT_FOUND" ? "Kunci API tidak ditemukan. Silakan hubungkan project berbayar Anda." : "Akses Ditolak. Pastikan Billing project Anda aktif.");
-    } else {
-      setErrorNotice("Ups! Ada gangguan teknis. Coba lagi ya!");
-    }
-  };
-
   const openPrayerDetail = async (prayer: DailyPrayer) => {
     playClick();
     setSelectedPrayer(prayer);
     setPrayerImage(null);
     setPrayerAudio(null);
     setErrorNotice(null);
-    setIsPermissionError(false);
     setItemLoading(true);
     try {
       const [imgData, audioData] = await Promise.all([
@@ -236,21 +202,19 @@ const App: React.FC = () => {
       ]);
       if (imgData) setPrayerImage(`data:image/png;base64,${imgData}`);
       if (audioData) { setPrayerAudio(audioData); playArabicAudio(audioData); }
-    } catch (err) { handleError(err); } finally { setItemLoading(false); }
+    } catch (err) { setErrorNotice("Gagal memuat doa."); } finally { setItemLoading(false); }
   };
 
   const startQuiz = async (category: string) => {
     playClick();
     setLoading(true);
     setErrorNotice(null);
-    setIsPermissionError(false);
     setCurrentCategory(category);
     try {
       let questions: QuizQuestion[] = [];
       try {
         questions = await geminiService.generateQuizQuestions(category);
       } catch (err) {
-        handleError(err);
         questions = STATIC_QUIZ_DATA[category] || [];
       }
       setCurrentQuiz(questions);
@@ -309,7 +273,7 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const [tafsirText, versesRes] = await Promise.all([
-        geminiService.getSurahTafsirForKids(surah.transliteration).catch(() => "Cerita indah tentang surat ini."),
+        geminiService.getSurahTafsirForKids(surah.transliteration).catch(() => "Pelajaran indah dari surat ini."),
         fetch(`https://equran.id/api/v2/surat/${surah.number}`).then(res => res.json())
       ]);
       setTafsir(tafsirText);
@@ -317,77 +281,48 @@ const App: React.FC = () => {
     } catch (err) { setErrorNotice("Gagal memuat surat."); } finally { setLoading(false); }
   };
 
-  // --- Fix for missing playAyatAudio ---
   const playAyatAudio = (index: number) => {
     playClick();
     if (playingAyat === index) {
-      if (ayatAudioRef.current) {
-        ayatAudioRef.current.pause();
-        ayatAudioRef.current = null;
-      }
+      if (ayatAudioRef.current) { ayatAudioRef.current.pause(); ayatAudioRef.current = null; }
       setPlayingAyat(null);
       return;
     }
-
-    if (ayatAudioRef.current) {
-      ayatAudioRef.current.pause();
-    }
-
+    if (ayatAudioRef.current) ayatAudioRef.current.pause();
     const verse = verses[index];
     if (!verse || !verse.audio) return;
-
     setLoadingAyat(index);
     const audio = new Audio(verse.audio["01"]);
     ayatAudioRef.current = audio;
-    
-    audio.oncanplaythrough = () => {
-      setLoadingAyat(null);
-      setPlayingAyat(index);
-      audio.play().catch(() => {
-        setPlayingAyat(null);
-      });
-    };
-
-    audio.onended = () => {
-      setPlayingAyat(null);
-    };
-
-    audio.onerror = () => {
-      setLoadingAyat(null);
-      setPlayingAyat(null);
-    };
+    audio.oncanplaythrough = () => { setLoadingAyat(null); setPlayingAyat(index); audio.play().catch(() => setPlayingAyat(null)); };
+    audio.onended = () => setPlayingAyat(null);
+    audio.onerror = () => { setLoadingAyat(null); setPlayingAyat(null); };
   };
 
-  // --- Fix for missing toggleHifz ---
   const toggleHifz = (surahNumber: number) => {
     playClick();
-    const newProgress = hifzProgress.includes(surahNumber)
-      ? hifzProgress.filter(n => n !== surahNumber)
-      : [...hifzProgress, surahNumber];
-    
+    const newProgress = hifzProgress.includes(surahNumber) ? hifzProgress.filter(n => n !== surahNumber) : [...hifzProgress, surahNumber];
     setHifzProgress(newProgress);
     localStorage.setItem('alifbata_hifz', JSON.stringify(newProgress));
   };
 
-  if (showKeyPicker || (!hasStarted && !showKeyPicker)) {
+  if (!hasStarted) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-400 to-sky-500 flex flex-col items-center justify-center p-8 text-white z-[100] overflow-hidden text-center">
         <BackgroundDecor />
         <div className="bg-white/20 backdrop-blur-xl p-10 rounded-[3.5rem] shadow-2xl mb-8 animate-in zoom-in duration-500 relative">
-           <Sparkles size={80} className="text-white animate-pulse" />
+           <Sparkles size={100} className="text-white animate-pulse" />
         </div>
-        <h1 className="text-5xl font-kids mb-4 drop-shadow-xl">AlifBaTa Kids</h1>
-        <div className="max-w-sm bg-white/10 backdrop-blur-md border border-white/20 p-8 rounded-[2.5rem] shadow-xl">
-          <p className="text-lg mb-6 leading-relaxed font-sans font-medium">
-            Siap belajar Bahasa Arab & Juz 30? Yuk, aktifkan fitur gambar & suara ceria dengan API Key Anda!
-          </p>
-          <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-sm text-yellow-200 underline flex items-center justify-center gap-2 mb-8 hover:text-white transition-all">
-            Info Penagihan Google Cloud <ExternalLink size={16}/>
-          </a>
-          <button onClick={showKeyPicker ? handleSetKey : handleStartApp} className="w-full bg-amber-400 text-amber-950 px-8 py-5 rounded-full font-kids text-2xl shadow-[0_8px_0_rgb(180,120,0)] flex items-center justify-center gap-3 active:translate-y-4 active:shadow-none transition-all">
-            <Key size={30} /> {showKeyPicker ? "Pilih API Key 🔑" : "Ayo Mulai! 🚀"}
-          </button>
-        </div>
+        <h1 className="text-6xl font-kids mb-6 drop-shadow-xl">AlifBaTa Kids</h1>
+        <p className="text-xl mb-12 max-w-xs font-sans font-medium opacity-90">
+          Belajar Bahasa Arab & Juz 30 Seru untuk Anak Sholeh!
+        </p>
+        <button 
+          onClick={handleStartApp} 
+          className="bg-amber-400 text-amber-950 px-12 py-6 rounded-full font-kids text-3xl shadow-[0_10px_0_rgb(180,120,0)] flex items-center justify-center gap-4 active:translate-y-4 active:shadow-none transition-all hover:scale-105"
+        >
+          <PlayCircle size={40} /> Ayo Mulai!
+        </button>
       </div>
     );
   }
@@ -396,7 +331,7 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-20 max-w-lg mx-auto px-4 pt-8 relative z-10 font-sans">
       <BackgroundDecor />
       
-      {/* Navbar - More Polished */}
+      {/* Navbar */}
       <div className="flex items-center justify-between mb-8 sticky top-4 z-50 bg-white/90 backdrop-blur-xl p-4 rounded-[2.5rem] border-2 border-white shadow-2xl">
         <div className="flex items-center gap-4">
           <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2.5 rounded-2xl shadow-lg cursor-pointer hover:rotate-12 transition-all" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); }}>
@@ -418,16 +353,15 @@ const App: React.FC = () => {
 
       {errorNotice && (
         <div className="bg-rose-50/95 backdrop-blur-md border-2 border-rose-100 p-6 rounded-[2rem] mb-8 animate-in slide-in-from-top-4 shadow-xl relative z-20">
-          <div className="flex items-start gap-4 mb-4">
+          <div className="flex items-start gap-4 mb-2">
             <AlertTriangle className="text-rose-500 shrink-0 mt-1" size={28} />
             <p className="text-rose-900 font-bold leading-tight text-base flex-1">{errorNotice}</p>
             <button onClick={() => { playClick(); setErrorNotice(null); }}><X size={24} className="text-rose-300" /></button>
           </div>
-          {isPermissionError && <Button variant="danger" className="w-full text-base py-3" onClick={handleSetKey}>Atur Ulang API Key 🔑</Button>}
         </div>
       )}
 
-      {/* Main Views */}
+      {/* Landing View */}
       {view === AppView.LANDING && (
         <div className="space-y-8 animate-in fade-in duration-700">
           <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border-b-[12px] border-emerald-700/20 group">
@@ -448,7 +382,7 @@ const App: React.FC = () => {
             <Card onClick={() => { playClick(); setView(AppView.DAILY_PRAYERS); }} className="col-span-2 border-rose-200 bg-rose-50/50 py-12 flex flex-col items-center group">
               <div className="bg-rose-400 p-7 rounded-[2.5rem] mb-4 text-white shadow-2xl group-hover:scale-110 transition-transform"><Sparkles size={56} /></div>
               <h3 className="font-kids text-3xl text-rose-800">Doa Harian</h3>
-              <p className="text-rose-400 text-sm font-bold mt-2 tracking-widest uppercase">Bangun s/d Tidur Lagi</p>
+              <p className="text-rose-400 text-sm font-bold mt-2 tracking-widest uppercase">Pagi s/d Malam</p>
             </Card>
           </div>
 
@@ -460,13 +394,13 @@ const App: React.FC = () => {
             <div className="h-12 w-px bg-emerald-100"></div>
             <div className="text-center group">
               <Star className="text-amber-500 mx-auto mb-2 group-hover:rotate-45 transition-transform" fill="currentColor" size={32}/>
-              <span className="block text-2xl font-kids text-amber-700">{score} Poin</span>
+              <span className="block text-2xl font-kids text-amber-700">{score} Bintang</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Quiz Game - Improved Layout as per Screenshot Feedback */}
+      {/* Quiz Game */}
       {view === AppView.QUIZ_GAME && currentQuiz[quizIndex] && (
         <div className="space-y-6 animate-in zoom-in-95 duration-500">
           <div className="flex items-center justify-between px-2 mb-2">
@@ -479,7 +413,7 @@ const App: React.FC = () => {
               {itemLoading ? (
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="animate-spin text-white" size={48}/>
-                  <p className="text-white font-kids text-lg animate-pulse">Menghias... ✨</p>
+                  <p className="text-white font-kids text-lg animate-pulse">Memuat... ✨</p>
                 </div>
               ) : currentQuiz[quizIndex].generatedImage ? (
                 <img src={currentQuiz[quizIndex].generatedImage} className="w-full h-full object-cover" alt="Quiz"/>
@@ -515,7 +449,6 @@ const App: React.FC = () => {
                     {String.fromCharCode(65 + i)}
                   </div>
                   <span className="flex-1">{option}</span>
-                  {answering && isCorrect && <CheckCircle2 size={24} className="text-white animate-bounce" />}
                 </button>
               );
             })}
@@ -523,33 +456,29 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Achievement & Other Views remains polished but similar logic */}
-      {view === AppView.ACHIEVEMENTS && (
-        <div className="text-center space-y-12 pt-16 animate-in zoom-in-90 duration-700">
-          <div className="relative inline-block">
-             <Trophy size={160} className="mx-auto text-amber-400 floating" />
-             <Sparkles className="absolute -top-4 -right-4 text-emerald-400 animate-pulse" size={48}/>
+      {/* Quiz Menu & Juz 30 Menu (Simplified common styles) */}
+      {(view === AppView.QUIZ_MENU || view === AppView.JUZ_30 || view === AppView.DAILY_PRAYERS) && !selectedSurah && !selectedPrayer && (
+        <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-10">
+          <div className={`rounded-[2.5rem] p-8 text-white shadow-2xl ${view === AppView.QUIZ_MENU ? 'bg-amber-400' : view === AppView.JUZ_30 ? 'bg-sky-400' : 'bg-rose-400'}`}>
+             <h2 className="text-3xl font-kids mb-1">
+               {view === AppView.QUIZ_MENU ? 'Pilih Tema Kuis 🎮' : view === AppView.JUZ_30 ? 'Hafalan Juz 30 ⭐' : 'Doa Anak Sholeh 🤲'}
+             </h2>
+             <p className="opacity-90 font-medium">Ayo belajar bersama!</p>
           </div>
-          <div className="space-y-4">
-            <h2 className="text-5xl font-kids text-gray-800">Maa Syaa Allah! 🎊</h2>
-            <p className="text-3xl text-emerald-500 font-kids drop-shadow-sm">Kamu dapat {score} Bintang!</p>
-          </div>
-          <div className="flex flex-col gap-6 max-w-xs mx-auto">
-            <Button onClick={() => setView(AppView.QUIZ_MENU)} className="py-6 text-2xl" variant="primary">Main Lagi! 🎮</Button>
-            <Button onClick={() => setView(AppView.LANDING)} className="py-6 text-2xl" variant="secondary">Beranda 🏠</Button>
-          </div>
-        </div>
-      )}
-
-      {/* Simplified Juz 30 & Daily Prayers for code brevity but maintaining style */}
-      {(view === AppView.JUZ_30 || view === AppView.DAILY_PRAYERS) && !selectedSurah && !selectedPrayer && (
-        <div className="space-y-6 animate-in slide-in-from-right duration-500">
-          <div className={`${view === AppView.JUZ_30 ? 'bg-sky-400' : 'bg-rose-400'} rounded-[2.5rem] p-8 text-white shadow-2xl`}>
-             <h2 className="text-3xl font-kids mb-1">{view === AppView.JUZ_30 ? 'Hafalan Juz 30 ⭐' : 'Doa Anak Sholeh 🤲'}</h2>
-             <p className="opacity-90 font-medium">Semangat belajar ya!</p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 pb-10">
-            {(view === AppView.JUZ_30 ? JUZ_30_SURAHS : DAILY_PRAYERS).map((item: any) => (
+          <div className="grid grid-cols-1 gap-4">
+            {view === AppView.QUIZ_MENU ? (
+              ['Hewan Lucu', 'Buah Segar', 'Benda di Rumah', 'Anggota Keluarga', 'Warna-warni', 'Angka Arab'].map((cat, idx) => (
+                <button key={cat} onClick={() => startQuiz(cat)} className="bg-white rounded-[2rem] p-6 shadow-lg border-b-[8px] border-gray-50 flex items-center justify-between group active:translate-y-2 transition-all">
+                  <div className="flex items-center gap-5">
+                    <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shadow-inner group-hover:scale-110 transition-transform">
+                      {loading && currentCategory === cat ? <Loader2 className="animate-spin" size={24}/> : <BrainCircuit size={28} />}
+                    </div>
+                    <span className="text-xl font-kids text-gray-700">{cat}</span>
+                  </div>
+                  <ChevronRight size={24} className="text-gray-300" />
+                </button>
+              ))
+            ) : (view === AppView.JUZ_30 ? JUZ_30_SURAHS : DAILY_PRAYERS).map((item: any) => (
               <button key={item.number || item.id} onClick={() => view === AppView.JUZ_30 ? openSurahDetail(item) : openPrayerDetail(item)} className="bg-white rounded-[2rem] p-6 shadow-lg border-b-[8px] border-gray-50 flex items-center justify-between group active:translate-y-2 transition-all">
                 <div className="flex items-center gap-5">
                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-kids shadow-inner ${hifzProgress.includes(item.number) ? 'bg-emerald-400 text-white' : 'bg-gray-100 text-gray-400'}`}>
@@ -564,28 +493,38 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Detailed Prayer View */}
+      {/* Achievement & Details Views remains high quality ... */}
+      {view === AppView.ACHIEVEMENTS && (
+        <div className="text-center space-y-12 pt-16 animate-in zoom-in-90 duration-700">
+          <Trophy size={160} className="mx-auto text-amber-400 floating" />
+          <div className="space-y-4">
+            <h2 className="text-5xl font-kids text-gray-800">Maa Syaa Allah! 🎊</h2>
+            <p className="text-3xl text-emerald-500 font-kids drop-shadow-sm">Kamu dapat {score} Bintang!</p>
+          </div>
+          <div className="flex flex-col gap-6 max-w-xs mx-auto">
+            <Button onClick={() => setView(AppView.QUIZ_MENU)} className="py-6 text-2xl" variant="primary">Main Lagi! 🎮</Button>
+            <Button onClick={() => setView(AppView.LANDING)} className="py-6 text-2xl" variant="secondary">Beranda 🏠</Button>
+          </div>
+        </div>
+      )}
+
       {selectedPrayer && (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-700 pb-20">
           <div className="bg-white rounded-[3rem] p-8 shadow-2xl border-b-[12px] border-rose-50 flex flex-col items-center">
             <h2 className="text-3xl font-kids text-rose-800 mb-8">{selectedPrayer.title}</h2>
             <div className="w-64 h-64 rounded-[3.5rem] mb-8 relative flex items-center justify-center shadow-2xl bg-gradient-to-br from-rose-100 to-rose-200 border-4 border-white shrink-0 overflow-hidden">
-              {itemLoading ? <div className="flex flex-col items-center gap-4"><Loader2 className="animate-spin text-rose-400" size={48}/><p className="text-rose-400 font-kids animate-pulse">Menghias... ✨</p></div> : prayerImage ? <img src={prayerImage} className="w-full h-full object-cover" alt="Prayer"/> : <Sparkles size={100} className="text-rose-200" />}
+              {itemLoading ? <Loader2 className="animate-spin text-rose-400" size={48}/> : prayerImage ? <img src={prayerImage} className="w-full h-full object-cover" alt="Prayer"/> : <Sparkles size={100} className="text-rose-200" />}
             </div>
             <div className="w-full text-center space-y-8">
-              <div className="font-arabic text-4xl text-emerald-700 leading-loose px-2" dir="rtl">{selectedPrayer.arabic}</div>
-              <div className="flex flex-col items-center gap-3">
-                <button onClick={() => prayerAudio && playArabicAudio(prayerAudio)} disabled={!prayerAudio} className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-xl active:translate-y-2 transition-all ${!prayerAudio ? 'bg-gray-100 text-gray-300' : 'bg-rose-400 text-white'}`}><Volume2 size={36}/></button>
-                <p className="font-kids text-rose-600">Dengar Suara</p>
-              </div>
+              <div className="font-arabic text-4xl text-emerald-700 leading-loose" dir="rtl">{selectedPrayer.arabic}</div>
+              <button onClick={() => prayerAudio && playArabicAudio(prayerAudio)} className="w-16 h-16 rounded-2xl bg-rose-400 text-white shadow-xl flex items-center justify-center mx-auto active:translate-y-2"><Volume2 size={36}/></button>
               <div className="p-6 bg-emerald-50/50 rounded-[2rem] border-2 border-white text-emerald-900 leading-relaxed italic text-lg shadow-inner">{selectedPrayer.translation}</div>
             </div>
           </div>
-          <Button onClick={() => setSelectedPrayer(null)} className="w-full py-6 text-2xl" variant="primary">Kembali ke Daftar 📋</Button>
+          <Button onClick={() => setSelectedPrayer(null)} className="w-full py-6 text-2xl" variant="primary">Kembali 📋</Button>
         </div>
       )}
 
-      {/* Detailed Surah View */}
       {selectedSurah && (
         <div className="space-y-6 animate-in slide-in-from-bottom duration-700 pb-24">
           <div className="bg-white rounded-[3rem] p-10 shadow-2xl text-center border-b-[12px] border-emerald-50">
@@ -593,9 +532,9 @@ const App: React.FC = () => {
             <h2 className="text-3xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
             <p className="text-gray-400 italic">"{selectedSurah.translation}"</p>
           </div>
-          <div className="bg-amber-50/50 p-6 rounded-[2.5rem] border-2 border-white shadow-xl relative overflow-hidden">
+          <div className="bg-amber-50/50 p-6 rounded-[2.5rem] border-2 border-white shadow-xl">
              <h3 className="font-kids text-amber-800 mb-3 flex items-center gap-3"><Sparkles size={24}/> Kisah Singkat</h3>
-             {loading ? <div className="flex justify-center p-4"><Loader2 className="animate-spin text-amber-400"/></div> : <p className="text-amber-900 leading-relaxed font-medium">{tafsir}</p>}
+             {loading ? <Loader2 className="animate-spin text-amber-400"/> : <p className="text-amber-900 leading-relaxed font-medium">{tafsir}</p>}
           </div>
           <div className="space-y-6">
              {verses.map((v, i) => (
