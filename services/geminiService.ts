@@ -54,9 +54,9 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image', // Menggunakan model flash agar tidak perlu pop-up key
+        model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `Cute 3D children illustration, vibrant colors: ${prompt}. White background.` }],
+          parts: [{ text: `A very simple, cute, 3D clay-style cartoon illustration of a ${prompt} for a children's book. Bright colors, white background, no text, clean look, high quality.` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -66,7 +66,7 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
-      console.warn("Image generation failed", e);
+      console.warn("Image generation failed for prompt:", prompt, e);
       return undefined; 
     }
   },
@@ -76,7 +76,7 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan suara ceria: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan sangat jelas dan ceria: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
