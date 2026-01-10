@@ -177,6 +177,9 @@ const App: React.FC = () => {
   const playArabicAudio = async (base64Audio: string) => {
     if (!base64Audio) return;
     try {
+      // Kecilkan volume musik latar saat suara arab diputar
+      if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.02;
+
       if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const ctx = audioContextRef.current;
       if (ctx.state === 'suspended') await ctx.resume();
@@ -184,8 +187,14 @@ const App: React.FC = () => {
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(ctx.destination);
+      source.onended = () => {
+        // Kembalikan volume musik latar
+        if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08;
+      };
       source.start();
-    } catch (err) {}
+    } catch (err) {
+      if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08;
+    }
   };
 
   const openPrayerDetail = async (prayer: DailyPrayer) => {
@@ -284,19 +293,52 @@ const App: React.FC = () => {
   const playAyatAudio = (index: number) => {
     playClick();
     if (playingAyat === index) {
-      if (ayatAudioRef.current) { ayatAudioRef.current.pause(); ayatAudioRef.current = null; }
+      if (ayatAudioRef.current) { 
+        ayatAudioRef.current.pause(); 
+        ayatAudioRef.current = null; 
+      }
       setPlayingAyat(null);
+      if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08;
       return;
     }
-    if (ayatAudioRef.current) ayatAudioRef.current.pause();
+
+    if (ayatAudioRef.current) {
+      ayatAudioRef.current.pause();
+    }
+
     const verse = verses[index];
-    if (!verse || !verse.audio) return;
+    // Gunakan qori nomor 05 (Mishary Rashid Al-Afasy) untuk kejernihan suara maksimal
+    const audioSrc = verse?.audio["05"] || verse?.audio["01"];
+    
+    if (!audioSrc) return;
+
+    // Kecilkan musik latar agar qori terdengar jelas
+    if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.01;
+
     setLoadingAyat(index);
-    const audio = new Audio(verse.audio["01"]);
+    const audio = new Audio(audioSrc);
     ayatAudioRef.current = audio;
-    audio.oncanplaythrough = () => { setLoadingAyat(null); setPlayingAyat(index); audio.play().catch(() => setPlayingAyat(null)); };
-    audio.onended = () => setPlayingAyat(null);
-    audio.onerror = () => { setLoadingAyat(null); setPlayingAyat(null); };
+
+    audio.oncanplaythrough = () => {
+      setLoadingAyat(null);
+      setPlayingAyat(index);
+      audio.play().catch(() => {
+        setPlayingAyat(null);
+        if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08;
+      });
+    };
+
+    audio.onended = () => {
+      setPlayingAyat(null);
+      if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08;
+    };
+
+    audio.onerror = () => {
+      setLoadingAyat(null);
+      setPlayingAyat(null);
+      if (bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08;
+      setErrorNotice("Server murottal sedang sibuk. Coba sebentar lagi ya.");
+    };
   };
 
   const toggleHifz = (surahNumber: number) => {
@@ -334,7 +376,7 @@ const App: React.FC = () => {
       {/* Navbar */}
       <div className="flex items-center justify-between mb-8 sticky top-4 z-50 bg-white/90 backdrop-blur-xl p-4 rounded-[2.5rem] border-2 border-white shadow-2xl">
         <div className="flex items-center gap-4">
-          <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2.5 rounded-2xl shadow-lg cursor-pointer hover:rotate-12 transition-all" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); }}>
+          <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2.5 rounded-2xl shadow-lg cursor-pointer hover:rotate-12 transition-all" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); if(ayatAudioRef.current) { ayatAudioRef.current.pause(); ayatAudioRef.current = null; } if(bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08; }}>
             <Sparkles className="text-white w-6 h-6" />
           </div>
           <h1 className="text-2xl font-kids gradient-text tracking-tight">AlifBaTa</h1>
@@ -344,7 +386,7 @@ const App: React.FC = () => {
             {isMuted ? <VolumeX size={24} /> : <Music size={24} />}
           </button>
           {view !== AppView.LANDING && (
-            <button onClick={() => { playClick(); if (selectedSurah) setSelectedSurah(null); else if (selectedPrayer) setSelectedPrayer(null); else setView(AppView.LANDING); }} className="p-3.5 bg-white rounded-2xl shadow-md text-emerald-600 border-2 border-emerald-50 active:scale-90 transition-all">
+            <button onClick={() => { playClick(); if (selectedSurah) { setSelectedSurah(null); if(ayatAudioRef.current) { ayatAudioRef.current.pause(); ayatAudioRef.current = null; } if(bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08; } else if (selectedPrayer) setSelectedPrayer(null); else setView(AppView.LANDING); }} className="p-3.5 bg-white rounded-2xl shadow-md text-emerald-600 border-2 border-emerald-50 active:scale-90 transition-all">
               <ArrowLeft size={24} />
             </button>
           )}
@@ -456,7 +498,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Quiz Menu & Juz 30 Menu (Simplified common styles) */}
+      {/* Menu Views */}
       {(view === AppView.QUIZ_MENU || view === AppView.JUZ_30 || view === AppView.DAILY_PRAYERS) && !selectedSurah && !selectedPrayer && (
         <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-10">
           <div className={`rounded-[2.5rem] p-8 text-white shadow-2xl ${view === AppView.QUIZ_MENU ? 'bg-amber-400' : view === AppView.JUZ_30 ? 'bg-sky-400' : 'bg-rose-400'}`}>
@@ -493,7 +535,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Achievement & Details Views remains high quality ... */}
+      {/* Achievement View */}
       {view === AppView.ACHIEVEMENTS && (
         <div className="text-center space-y-12 pt-16 animate-in zoom-in-90 duration-700">
           <Trophy size={160} className="mx-auto text-amber-400 floating" />
@@ -508,6 +550,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Prayer Detail */}
       {selectedPrayer && (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-700 pb-20">
           <div className="bg-white rounded-[3rem] p-8 shadow-2xl border-b-[12px] border-rose-50 flex flex-col items-center">
@@ -525,31 +568,38 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Surah Detail - Fix Padding for Navbar Overlap */}
       {selectedSurah && (
-        <div className="space-y-6 animate-in slide-in-from-bottom duration-700 pb-24">
+        <div className="space-y-6 animate-in slide-in-from-bottom duration-700 pb-32 pt-10">
           <div className="bg-white rounded-[3rem] p-10 shadow-2xl text-center border-b-[12px] border-emerald-50">
             <div className="font-arabic text-7xl text-emerald-600 mb-4">{selectedSurah.name}</div>
             <h2 className="text-3xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
             <p className="text-gray-400 italic">"{selectedSurah.translation}"</p>
           </div>
-          <div className="bg-amber-50/50 p-6 rounded-[2.5rem] border-2 border-white shadow-xl">
+          
+          <div className="bg-amber-50/70 p-8 rounded-[2.5rem] border-2 border-white shadow-xl">
              <h3 className="font-kids text-amber-800 mb-3 flex items-center gap-3"><Sparkles size={24}/> Kisah Singkat</h3>
-             {loading ? <Loader2 className="animate-spin text-amber-400"/> : <p className="text-amber-900 leading-relaxed font-medium">{tafsir}</p>}
+             {loading ? <div className="flex justify-center p-4"><Loader2 className="animate-spin text-amber-400"/></div> : <p className="text-amber-900 leading-relaxed font-medium text-lg">{tafsir}</p>}
           </div>
-          <div className="space-y-6">
+
+          <div className="space-y-8">
              {verses.map((v, i) => (
                <div key={i} className={`bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[8px] transition-all ${playingAyat === i ? 'border-amber-400 ring-4 ring-amber-100' : 'border-gray-100'}`}>
                  <div className="flex justify-between items-center mb-6">
-                   <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center font-kids text-emerald-600 shadow-inner">{v.nomorAyat}</div>
-                   <button onClick={() => playAyatAudio(i)} className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg active:translate-y-2 transition-all ${playingAyat === i ? 'bg-amber-400 text-white animate-pulse' : 'bg-emerald-400 text-white'}`}>
-                     {loadingAyat === i ? <Loader2 className="animate-spin" size={24}/> : (playingAyat === i ? <VolumeX size={28}/> : <Volume2 size={28}/>)}
+                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-kids text-emerald-600 shadow-inner text-xl">{v.nomorAyat}</div>
+                   <button 
+                    onClick={() => playAyatAudio(i)} 
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:translate-y-2 transition-all ${playingAyat === i ? 'bg-amber-400 text-white animate-pulse' : 'bg-emerald-400 text-white'}`}
+                   >
+                     {loadingAyat === i ? <Loader2 className="animate-spin" size={28}/> : (playingAyat === i ? <VolumeX size={32}/> : <Volume2 size={32}/>)}
                    </button>
                  </div>
-                 <div className="text-right font-arabic text-4xl leading-loose text-gray-800 mb-6" dir="rtl">{v.teksArab}</div>
-                 <p className="text-emerald-900 text-lg font-medium leading-relaxed italic border-t border-emerald-50 pt-6">{v.teksIndonesia}</p>
+                 <div className="text-right font-arabic text-5xl leading-loose text-gray-800 mb-8 select-all" dir="rtl">{v.teksArab}</div>
+                 <p className="text-emerald-900 text-xl font-medium leading-relaxed italic border-t border-emerald-50 pt-8">{v.teksIndonesia}</p>
                </div>
              ))}
           </div>
+
           <div className="fixed bottom-8 left-0 right-0 px-8 z-40 max-w-lg mx-auto">
             <Button onClick={() => toggleHifz(selectedSurah!.number)} className="w-full py-6 text-2xl shadow-2xl" variant={hifzProgress.includes(selectedSurah!.number) ? 'primary' : 'secondary'}>
               {hifzProgress.includes(selectedSurah!.number) ? 'Sudah Hafal! ✅' : 'Tandai Hafal 💖'}
