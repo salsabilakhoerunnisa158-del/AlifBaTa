@@ -10,7 +10,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
     return await fn();
   } catch (error: any) {
     const errorMsg = error?.message?.toLowerCase() || "";
-    // Identifikasi error spesifik yang tidak butuh retry
+    // Identifikasi error spesifik yang butuh penanganan kunci API
     const isPermissionError = 
       errorMsg.includes('permission') || 
       errorMsg.includes('denied') || 
@@ -19,7 +19,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
       errorMsg.includes('404');
     
     if (isPermissionError) {
-      console.warn("Gemini API Error (No Retry):", errorMsg);
+      console.warn("Gemini API Error (Permission/Key):", errorMsg);
       throw new Error("PERMISSION_DENIED");
     }
 
@@ -35,6 +35,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
 export const geminiService = {
   async generateQuizQuestions(category: string): Promise<QuizQuestion[]> {
     return withRetry(async () => {
+      // Buat instance baru setiap kali pemanggilan agar menggunakan API_KEY terbaru
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
@@ -47,7 +48,7 @@ Each object must have:
 - "correctAnswer": (string) The correct Latin transliteration.
 - "imagePrompt": (string) A simple visual description.`,
         config: {
-          thinkingConfig: { thinkingBudget: 0 }, // Cepat tanpa deep reasoning
+          thinkingConfig: { thinkingBudget: 0 },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -74,33 +75,29 @@ Each object must have:
   },
 
   async generateImage(prompt: string): Promise<string | undefined> {
-    try {
-      // Untuk gambar kita tidak pakai retry agar UI cepat memberikan feedback fallback
+    return withRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3-pro-image-preview', // Menggunakan model pro untuk kualitas lebih baik
         contents: {
-          parts: [{ text: `Cute vibrant 3D clay cartoon for kids, solid background, high quality: ${prompt}` }],
+          parts: [{ text: `High quality children's book illustration, vibrant colors, 3D style, simple background: ${prompt}` }],
         },
         config: {
-          imageConfig: { aspectRatio: "1:1" }
+          imageConfig: { aspectRatio: "1:1", imageSize: "1K" }
         }
       });
       
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
-    } catch (err) {
-      console.warn("Image API failing, app will use category icon fallback.");
-      return undefined;
-    }
+    });
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
-    try {
+    return withRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Sebutkan dengan perlahan dan ceria: ${text}` }] }],
+        contents: [{ parts: [{ text: `Sebutkan dengan perlahan, jelas, dan ceria: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -112,9 +109,7 @@ Each object must have:
       });
       
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    } catch (err) {
-      return undefined;
-    }
+    });
   },
 
   async getSurahTafsirForKids(surahName: string): Promise<string> {
@@ -122,7 +117,7 @@ Each object must have:
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Kisah Surah ${surahName} untuk anak (maks 100 kata).`,
+        contents: `Jelaskan kisah atau pelajaran dari Surah ${surahName} untuk anak-anak kecil. Gunakan bahasa yang sangat sederhana dan ceria (maks 100 kata).`,
       });
       return response.text || "Cerita indah segera hadir!";
     });

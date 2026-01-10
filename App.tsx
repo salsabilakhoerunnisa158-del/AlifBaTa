@@ -268,6 +268,8 @@ const App: React.FC = () => {
     setSelectedPrayer(prayer);
     setPrayerImage(null);
     setPrayerAudio(null);
+    setErrorNotice(null);
+    setIsPermissionError(false);
     setItemLoading(true);
     
     try {
@@ -281,8 +283,14 @@ const App: React.FC = () => {
         setPrayerAudio(audioData);
         playArabicAudio(audioData);
       }
-    } catch (err) {
-      console.warn("Failed to load prayer media");
+    } catch (err: any) {
+      console.error("Failed to load prayer media", err);
+      if (err.message === "PERMISSION_DENIED") {
+        setIsPermissionError(true);
+        setErrorNotice("Gagal memuat gambar/audio. Klik tombol di bawah untuk memilih API Key berbayar Anda.");
+      } else {
+        setErrorNotice("Maaf, terjadi masalah koneksi saat memuat media.");
+      }
     } finally {
       setItemLoading(false);
     }
@@ -303,7 +311,7 @@ const App: React.FC = () => {
       } catch (err: any) {
         if (err.message === "PERMISSION_DENIED") {
           setIsPermissionError(true);
-          setErrorNotice("API Key Bermasalah. Gunakan soal cadangan.");
+          setErrorNotice("Kunci API bermasalah. Menggunakan soal cadangan.");
         }
         questions = STATIC_QUIZ_DATA[category] || [];
       }
@@ -390,7 +398,6 @@ const App: React.FC = () => {
     playClick();
     ensureMusicPlaying();
     
-    // Hentikan murottal jika sedang diputar
     if (playingAyat === index) {
       if (ayatAudioRef.current) {
         ayatAudioRef.current.pause();
@@ -401,8 +408,6 @@ const App: React.FC = () => {
     }
 
     setLoadingAyat(index);
-    
-    // Pilih qori index '05' (Mishary Rashid Al-Afasy) untuk kejernihan suara terbaik
     const audioUrl = verses[index].audio["05"] || verses[index].audio["01"];
     
     if (ayatAudioRef.current) {
@@ -426,7 +431,7 @@ const App: React.FC = () => {
     
     audio.onerror = () => { 
       setLoadingAyat(null); 
-      setErrorNotice("Gagal memutar murottal jernih. Coba lagi.");
+      setErrorNotice("Gagal memutar murottal. Coba lagi.");
     };
 
     audio.play().catch((e) => {
@@ -495,7 +500,7 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-10 max-w-lg mx-auto px-4 pt-6 relative z-10" onClick={ensureMusicPlaying}>
       <BackgroundDecor />
       
-      {/* Navbar - Optimized Size */}
+      {/* Navbar */}
       <div className="flex items-center justify-between mb-6 sticky top-2 z-50 bg-white/80 backdrop-blur-lg p-3 rounded-[2rem] border-2 border-white/50 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2 rounded-xl shadow-md cursor-pointer" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); }}>
@@ -538,14 +543,17 @@ const App: React.FC = () => {
             </button>
           </div>
           {isPermissionError && (
-            <Button variant="danger" className="w-full text-sm py-2" onClick={handleSetKey}>
-              Atur Kunci API
-            </Button>
+            <div className="px-2 pb-2">
+              <Button variant="danger" className="w-full text-sm py-2" onClick={handleSetKey}>
+                Aktifkan API (Pilih Key) 🔑
+              </Button>
+              <p className="text-[10px] text-rose-400 mt-2 text-center">Fitur generatif gambar & suara memerlukan API Key dari project berbayar (GCP Billing).</p>
+            </div>
           )}
         </div>
       )}
 
-      {/* Landing - Compact Layout with Doa Section */}
+      {/* Landing View */}
       {view === AppView.LANDING && (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden border-b-[8px] border-emerald-700/20">
@@ -600,7 +608,7 @@ const App: React.FC = () => {
         <div className="space-y-4 animate-in slide-in-from-right duration-300">
           <h2 className="text-2xl font-kids text-rose-900 text-center mb-6">Doa Harian Anak Sholeh 🤲</h2>
           <div className="grid grid-cols-1 gap-3">
-            {DAILY_PRAYERS.map((prayer, idx) => (
+            {DAILY_PRAYERS.map((prayer) => (
               <button 
                 key={prayer.id} 
                 onClick={() => openPrayerDetail(prayer)}
@@ -629,12 +637,15 @@ const App: React.FC = () => {
               {itemLoading ? (
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="animate-spin text-rose-400" size={40}/>
-                  <p className="text-rose-400 font-kids text-sm">Menyiapkan Gambar...</p>
+                  <p className="text-rose-400 font-kids text-sm animate-pulse">Menghias Gambar... ✨</p>
                 </div>
               ) : prayerImage ? (
                 <img src={prayerImage} alt="Visual" className="w-full h-full object-cover" />
               ) : (
-                <Sparkles size={80} className="text-rose-300" />
+                <div className="flex flex-col items-center">
+                  <Sparkles size={80} className="text-rose-300 mb-2" />
+                  <p className="text-[10px] text-rose-300 px-4 text-center">Gambar tidak tersedia (Cek API Key)</p>
+                </div>
               )}
             </div>
 
@@ -649,9 +660,9 @@ const App: React.FC = () => {
                   disabled={itemLoading || !prayerAudio}
                   className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md active:translate-y-1 transition-all ${!prayerAudio ? 'bg-gray-100 text-gray-300' : 'bg-rose-400 text-white hover:bg-rose-500 shadow-rose-200'}`}
                 >
-                  <Volume2 size={28}/>
+                  {itemLoading ? <Loader2 className="animate-spin" /> : <Volume2 size={28}/>}
                 </button>
-                <p className="text-rose-600 font-kids text-sm">Dengarkan Audio</p>
+                <p className="text-rose-600 font-kids text-sm">{prayerAudio ? "Dengarkan Audio" : "Audio Belum Siap"}</p>
               </div>
 
               <div className="w-full space-y-4 text-center">
@@ -672,7 +683,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Quiz Menu - List optimized */}
+      {/* View lainnya tetap sama (Quiz, Juz 30, Achievements) - disingkat untuk efisiensi XML */}
       {view === AppView.QUIZ_MENU && (
         <div className="space-y-4 animate-in slide-in-from-right duration-300">
           <h2 className="text-2xl font-kids text-emerald-900 text-center mb-6">Pilih Tema Kuis 🗺️</h2>
@@ -700,85 +711,78 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Quiz Game - Compact & Fit in one screen */}
-      {view === AppView.QUIZ_GAME && (
+      {view === AppView.QUIZ_GAME && currentQuiz[quizIndex] && (
         <div className="space-y-4 animate-in zoom-in-95 duration-300">
-          {currentQuiz[quizIndex] && (
-            <>
-              <div className="flex items-center justify-between px-2">
-                <div className="bg-white/90 px-5 py-2 rounded-full text-emerald-800 font-kids text-sm shadow-sm">
-                  Soal {quizIndex + 1} / {currentQuiz.length}
-                </div>
-                <div className="bg-amber-400 px-5 py-2 rounded-full text-amber-950 font-kids text-sm shadow-md border-b-4 border-amber-600">
-                  {score} ✨
-                </div>
+          <div className="flex items-center justify-between px-2">
+            <div className="bg-white/90 px-5 py-2 rounded-full text-emerald-800 font-kids text-sm shadow-sm">
+              Soal {quizIndex + 1} / {currentQuiz.length}
+            </div>
+            <div className="bg-amber-400 px-5 py-2 rounded-full text-amber-950 font-kids text-sm shadow-md border-b-4 border-amber-600">
+              {score} ✨
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-[2rem] p-5 shadow-lg text-center border-b-[10px] border-gray-100 relative overflow-hidden flex flex-col items-center">
+            {itemLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-4">
+                <Music className="text-emerald-400 w-16 h-16 animate-bounce" />
+                <p className="text-emerald-900 font-kids text-lg">Mencari Gambar... ✨</p>
               </div>
-              
-              <div className="bg-white rounded-[2rem] p-5 shadow-lg text-center border-b-[10px] border-gray-100 relative overflow-hidden flex flex-col items-center">
-                {itemLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-4">
-                    <Music className="text-emerald-400 w-16 h-16 animate-bounce" />
-                    <p className="text-emerald-900 font-kids text-lg">Mencari Gambar... ✨</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className={`w-48 h-48 rounded-[2rem] mb-4 relative flex items-center justify-center shadow-md bg-gradient-to-br ${getCategoryColors(currentCategory)} border-4 border-white shrink-0`}>
-                      {currentQuiz[quizIndex].generatedImage ? (
-                        <img src={currentQuiz[quizIndex].generatedImage} alt="V" className="w-full h-full object-cover rounded-[1.6rem]" />
-                      ) : (
-                        <CategoryIcon category={currentCategory} size={60} />
-                      )}
-                      <Sparkles className="absolute bottom-2 right-2 text-white/50" size={16}/>
-                    </div>
-                    
-                    <div className="flex items-center justify-center gap-4 mb-3 h-16">
-                      <div className="font-arabic text-5xl text-emerald-600 leading-none">{currentQuiz[quizIndex].arabicWord}</div>
-                      <button 
-                        onClick={() => playArabicAudio(currentQuiz[quizIndex].audioData!)}
-                        className="w-10 h-10 rounded-xl bg-emerald-400 text-white shadow-[0_4px_0_rgb(5,150,105)] active:translate-y-1 transition-all flex items-center justify-center"
-                      >
-                        <Volume2 size={20}/>
-                      </button>
-                    </div>
-                    
-                    <h3 className="text-xl font-kids text-gray-800 leading-tight mb-2">
-                      {currentQuiz[quizIndex].question}
-                    </h3>
-                  </>
-                )}
-              </div>
+            ) : (
+              <>
+                <div className={`w-48 h-48 rounded-[2rem] mb-4 relative flex items-center justify-center shadow-md bg-gradient-to-br ${getCategoryColors(currentCategory)} border-4 border-white shrink-0`}>
+                  {currentQuiz[quizIndex].generatedImage ? (
+                    <img src={currentQuiz[quizIndex].generatedImage} alt="V" className="w-full h-full object-cover rounded-[1.6rem]" />
+                  ) : (
+                    <CategoryIcon category={currentCategory} size={60} />
+                  )}
+                </div>
+                
+                <div className="flex items-center justify-center gap-4 mb-3 h-16">
+                  <div className="font-arabic text-5xl text-emerald-600 leading-none">{currentQuiz[quizIndex].arabicWord}</div>
+                  <button 
+                    onClick={() => currentQuiz[quizIndex].audioData && playArabicAudio(currentQuiz[quizIndex].audioData!)}
+                    className="w-10 h-10 rounded-xl bg-emerald-400 text-white shadow-[0_4px_0_rgb(5,150,105)] active:translate-y-1 transition-all flex items-center justify-center"
+                  >
+                    <Volume2 size={20}/>
+                  </button>
+                </div>
+                
+                <h3 className="text-xl font-kids text-gray-800 leading-tight mb-2">
+                  {currentQuiz[quizIndex].question}
+                </h3>
+              </>
+            )}
+          </div>
 
-              <div className="grid grid-cols-1 gap-2.5 pt-2">
-                {currentQuiz[quizIndex].options.map((option, i) => {
-                  const isSelected = selectedOption === option;
-                  const isCorrect = option === currentQuiz[quizIndex].correctAnswer;
-                  let btnStyle = "bg-white border-gray-100 text-gray-700";
-                  if (answering) {
-                    if (isCorrect) btnStyle = "bg-emerald-400 border-emerald-600 text-white scale-[1.02]";
-                    else if (isSelected) btnStyle = "bg-rose-400 border-rose-600 text-white";
-                    else btnStyle = "opacity-40 scale-95";
-                  }
-                  return (
-                    <button
-                      key={i}
-                      disabled={itemLoading || answering}
-                      onClick={() => handleAnswer(option)}
-                      className={`p-4 rounded-[1.5rem] border-2 border-b-[6px] text-lg font-kids shadow-sm transition-all text-left flex items-center gap-4 ${btnStyle}`}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm font-kids text-gray-400">
-                        {String.fromCharCode(65 + i)}
-                      </div>
-                      <span className="truncate">{option}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
+          <div className="grid grid-cols-1 gap-2.5 pt-2">
+            {currentQuiz[quizIndex].options.map((option, i) => {
+              const isSelected = selectedOption === option;
+              const isCorrect = option === currentQuiz[quizIndex].correctAnswer;
+              let btnStyle = "bg-white border-gray-100 text-gray-700";
+              if (answering) {
+                if (isCorrect) btnStyle = "bg-emerald-400 border-emerald-600 text-white scale-[1.02]";
+                else if (isSelected) btnStyle = "bg-rose-400 border-rose-600 text-white";
+                else btnStyle = "opacity-40 scale-95";
+              }
+              return (
+                <button
+                  key={i}
+                  disabled={itemLoading || answering}
+                  onClick={() => handleAnswer(option)}
+                  className={`p-4 rounded-[1.5rem] border-2 border-b-[6px] text-lg font-kids shadow-sm transition-all text-left flex items-center gap-4 ${btnStyle}`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm font-kids text-gray-400">
+                    {String.fromCharCode(65 + i)}
+                  </div>
+                  <span className="truncate">{option}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Juz 30 - List View optimized */}
       {view === AppView.JUZ_30 && !selectedSurah && (
         <div className="space-y-4 animate-in slide-in-from-bottom duration-500">
           <div className="bg-sky-400 rounded-[1.5rem] p-6 text-white shadow-lg border-b-[8px] border-sky-700/20">
@@ -805,7 +809,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Surah Detail */}
       {selectedSurah && (
         <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 pb-20">
           <div className="bg-white rounded-[2rem] p-6 shadow-md text-center border-b-[10px] border-emerald-50 flex flex-col items-center">
@@ -848,7 +851,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Achievements - Compact */}
       {view === AppView.ACHIEVEMENTS && (
         <div className="text-center space-y-10 pt-20 animate-in zoom-in-90 duration-500">
           <Trophy size={120} className="mx-auto text-amber-400 floating" />
