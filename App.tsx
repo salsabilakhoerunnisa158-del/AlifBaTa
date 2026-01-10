@@ -157,11 +157,11 @@ const App: React.FC = () => {
 
     clickAudioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3");
     
-    // Gunakan URL audio yang lebih stabil dan dipastikan bisa diakses publik
-    correctSfxRef.current = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_78330a6e38.mp3"); // Suara ding/success
+    // Suara Benar & Salah
+    correctSfxRef.current = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_78330a6e38.mp3");
     correctSfxRef.current.crossOrigin = "anonymous";
     
-    wrongSfxRef.current = new Audio("https://cdn.pixabay.com/audio/2022/03/10/audio_c356133068.mp3"); // Suara oof/wrong
+    wrongSfxRef.current = new Audio("https://cdn.pixabay.com/audio/2022/03/10/audio_c356133068.mp3");
     wrongSfxRef.current.crossOrigin = "anonymous";
 
     return () => {
@@ -242,14 +242,14 @@ const App: React.FC = () => {
     if (!q) return;
     setItemLoading(true);
     try {
-      // Prioritaskan audio dulu agar segera terdengar, lalu gambar
-      const [imgData, audioData] = await Promise.allSettled([
-        geminiService.generateImage(q.imagePrompt),
-        geminiService.generateSpeech(q.arabicWord)
-      ]);
+      // Gunakan penanganan yang lebih hati-hati untuk memastikan state terupdate meskipun salah satu gagal
+      const imgPromise = geminiService.generateImage(q.imagePrompt);
+      const audioPromise = geminiService.generateSpeech(q.arabicWord);
       
-      const imgVal = imgData.status === 'fulfilled' ? imgData.value : undefined;
-      const audioVal = audioData.status === 'fulfilled' ? audioData.value : undefined;
+      const [imgVal, audioVal] = await Promise.all([
+        imgPromise.catch(e => { console.warn("Img fail", e); return undefined; }),
+        audioPromise.catch(e => { console.warn("Audio fail", e); return undefined; })
+      ]);
       
       const updatedQuiz = [...questions];
       updatedQuiz[index] = { 
@@ -271,17 +271,16 @@ const App: React.FC = () => {
     setSelectedOption(answer);
     const isCorrect = answer === currentQuiz[quizIndex].correctAnswer;
     
-    // Mainkan sound feedback
     if (isCorrect) {
       setScore(s => s + 10);
       if (correctSfxRef.current) { 
         correctSfxRef.current.currentTime = 0; 
-        correctSfxRef.current.play().catch(e => console.warn("Error playing correct sfx", e)); 
+        correctSfxRef.current.play().catch(() => {}); 
       }
     } else {
       if (wrongSfxRef.current) { 
         wrongSfxRef.current.currentTime = 0; 
-        wrongSfxRef.current.play().catch(e => console.warn("Error playing wrong sfx", e)); 
+        wrongSfxRef.current.play().catch(() => {}); 
       }
     }
 
@@ -344,8 +343,8 @@ const App: React.FC = () => {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-400 to-sky-500 flex flex-col items-center justify-center p-8 text-white z-[100] overflow-hidden text-center">
         <BackgroundDecor />
-        <div className="bg-white/20 backdrop-blur-xl p-10 rounded-[3.5rem] shadow-2xl mb-8 animate-in zoom-in duration-500 relative">
-           <Sparkles size={100} className="text-white animate-pulse" />
+        <div className="bg-white/20 backdrop-blur-xl p-4 rounded-[3.5rem] shadow-2xl mb-8 animate-in zoom-in duration-500 relative flex items-center justify-center overflow-hidden w-64 h-64 border-4 border-white/30">
+           <img src="icon.png" alt="Mascot" className="w-full h-full object-cover floating" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241517.png"; }} />
         </div>
         <h1 className="text-6xl font-kids mb-6 drop-shadow-xl">AlifBaTa Kids</h1>
         <p className="text-xl mb-12 max-w-xs font-sans font-medium opacity-90">
@@ -365,8 +364,8 @@ const App: React.FC = () => {
       {/* Navbar */}
       <div className="flex items-center justify-between mb-8 sticky top-4 z-50 bg-white/90 backdrop-blur-xl p-4 rounded-[2.5rem] border-2 border-white shadow-2xl">
         <div className="flex items-center gap-4">
-          <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2.5 rounded-2xl shadow-lg cursor-pointer hover:rotate-12 transition-all" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); if(ayatAudioRef.current) { ayatAudioRef.current.pause(); ayatAudioRef.current = null; } if(bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08; }}>
-            <Sparkles className="text-white w-6 h-6" />
+          <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-1.5 rounded-2xl shadow-lg cursor-pointer hover:rotate-12 transition-all flex items-center justify-center" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); if(ayatAudioRef.current) { ayatAudioRef.current.pause(); ayatAudioRef.current = null; } if(bgMusicRef.current && !isMuted) bgMusicRef.current.volume = 0.08; }}>
+            <img src="icon.png" alt="Small Mascot" className="w-10 h-10 rounded-xl" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241517.png"; }} />
           </div>
           <h1 className="text-2xl font-kids gradient-text tracking-tight">AlifBaTa</h1>
         </div>
@@ -395,10 +394,15 @@ const App: React.FC = () => {
       {/* Main Views */}
       {view === AppView.LANDING && (
         <div className="space-y-8 animate-in fade-in duration-700">
-          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border-b-[12px] border-emerald-700/20 group">
-            <h2 className="text-4xl font-kids mb-2 drop-shadow-md">Assalamu'alaikum! 👋</h2>
-            <p className="text-emerald-50 text-xl font-medium opacity-90">Kumpulkan bintang & belajar seru!</p>
-            <Sparkles className="absolute -right-4 -bottom-4 text-white/10 w-32 h-32 group-hover:scale-110 transition-transform" />
+          <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden border-b-[12px] border-emerald-700/20 flex items-center gap-6 group">
+            <div className="shrink-0 w-24 h-24 bg-white/20 p-1 rounded-[2rem] border-2 border-white/30 backdrop-blur-md overflow-hidden shadow-inner">
+               <img src="icon.png" alt="Banner Mascot" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241517.png"; }} />
+            </div>
+            <div>
+              <h2 className="text-3xl font-kids mb-1 drop-shadow-md">Ahlan wa Sahlan! 👋</h2>
+              <p className="text-emerald-50 text-lg font-medium opacity-90">Kumpulkan bintang & belajar seru!</p>
+            </div>
+            <Sparkles className="absolute -right-4 -bottom-4 text-white/10 w-32 h-32" />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -444,7 +448,7 @@ const App: React.FC = () => {
               {itemLoading ? (
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="animate-spin text-white" size={48}/>
-                  <p className="text-white font-kids text-lg animate-pulse">Membuat... ✨</p>
+                  <p className="text-white font-kids text-lg animate-pulse">Sedang menggambar... ✨</p>
                 </div>
               ) : currentQuiz[quizIndex].generatedImage ? (
                 <img src={currentQuiz[quizIndex].generatedImage} className="w-full h-full object-cover animate-in fade-in duration-500" alt="Quiz"/>
@@ -492,14 +496,17 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* View list ... */}
+      {/* Menu Views */}
       {(view === AppView.QUIZ_MENU || view === AppView.JUZ_30 || view === AppView.DAILY_PRAYERS) && !selectedSurah && !selectedPrayer && (
         <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-10">
-          <div className={`rounded-[2.5rem] p-8 text-white shadow-2xl ${view === AppView.QUIZ_MENU ? 'bg-amber-400' : view === AppView.JUZ_30 ? 'bg-sky-400' : 'bg-rose-400'}`}>
-             <h2 className="text-3xl font-kids mb-1">
-               {view === AppView.QUIZ_MENU ? 'Pilih Tema Kuis 🎮' : view === AppView.JUZ_30 ? 'Hafalan Juz 30 ⭐' : 'Doa Anak Sholeh 🤲'}
-             </h2>
-             <p className="opacity-90 font-medium">Ayo belajar bersama!</p>
+          <div className={`rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden ${view === AppView.QUIZ_MENU ? 'bg-amber-400' : view === AppView.JUZ_30 ? 'bg-sky-400' : 'bg-rose-400'}`}>
+             <div className="relative z-10">
+               <h2 className="text-3xl font-kids mb-1">
+                 {view === AppView.QUIZ_MENU ? 'Pilih Tema Kuis 🎮' : view === AppView.JUZ_30 ? 'Hafalan Juz 30 ⭐' : 'Doa Anak Sholeh 🤲'}
+               </h2>
+               <p className="opacity-90 font-medium">Ayo belajar bersama!</p>
+             </div>
+             <img src="icon.png" alt="Overlay Mascot" className="absolute -right-6 -bottom-6 w-32 h-32 opacity-20 pointer-events-none" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241517.png"; }} />
           </div>
           <div className="grid grid-cols-1 gap-4">
             {view === AppView.QUIZ_MENU ? (
@@ -531,7 +538,10 @@ const App: React.FC = () => {
 
       {view === AppView.ACHIEVEMENTS && (
         <div className="text-center space-y-12 pt-16 animate-in zoom-in-90 duration-700">
-          <Trophy size={160} className="mx-auto text-amber-400 floating" />
+          <div className="relative inline-block">
+             <Trophy size={160} className="mx-auto text-amber-400 floating" />
+             <img src="icon.png" alt="Happy Mascot" className="absolute -bottom-4 -right-4 w-24 h-24 rounded-full border-4 border-white shadow-xl" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241517.png"; }} />
+          </div>
           <div className="space-y-4">
             <h2 className="text-5xl font-kids text-gray-800">Maa Syaa Allah! 🎊</h2>
             <p className="text-3xl text-emerald-500 font-kids drop-shadow-sm">Kamu dapat {score} Bintang!</p>
@@ -562,7 +572,8 @@ const App: React.FC = () => {
 
       {selectedSurah && (
         <div className="space-y-6 animate-in slide-in-from-bottom duration-700 pb-32 pt-10">
-          <div className="bg-white rounded-[3rem] p-10 shadow-2xl text-center border-b-[12px] border-emerald-50">
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl text-center border-b-[12px] border-emerald-50 relative overflow-hidden">
+            <img src="icon.png" alt="Detail Mascot" className="absolute -left-10 -top-10 w-32 h-32 opacity-10 rotate-12" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241517.png"; }} />
             <div className="font-arabic text-7xl text-emerald-600 mb-4">{selectedSurah.name}</div>
             <h2 className="text-3xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
             <p className="text-gray-400 italic">"{selectedSurah.translation}"</p>

@@ -53,11 +53,12 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
   async generateImage(prompt: string): Promise<string | undefined> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Prompt dibuat lebih eksplisit agar model Flash-Image lebih mudah memprosesnya
+      // Prompt disesuaikan agar gayanya mirip dengan maskot (3D Chibi / Pixar style)
+      // Menambahkan 'high-detail' dan 'vibrant' untuk kualitas maksimal
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A vibrant, high-quality, cute 3D cartoon illustration of ${prompt}. Clean white background, kid-friendly style, 4k resolution, no text.` }],
+          parts: [{ text: `A professional 3D chibi style illustration of ${prompt}, high-quality 3D render, cute animated character style, vibrant colors, clean white background, soft lighting, 4k resolution, kid-friendly, masterwork, no text.` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -68,7 +69,20 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       return part?.inlineData?.data;
     } catch (e) {
       console.warn("Image generation failed for prompt:", prompt, e);
-      return undefined; 
+      // Fallback: Coba sekali lagi dengan prompt yang lebih sederhana jika gagal
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const retryResponse = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image',
+          contents: {
+            parts: [{ text: `Cute simple cartoon of ${prompt}, white background, bright colors.` }],
+          }
+        });
+        const retryPart = retryResponse.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+        return retryPart?.inlineData?.data;
+      } catch (innerE) {
+        return undefined;
+      }
     }
   },
 
