@@ -31,7 +31,8 @@ import {
   Home,
   Users,
   Palette,
-  Hash
+  Hash,
+  ExternalLink
 } from 'lucide-react';
 
 // --- Decorative Components ---
@@ -132,6 +133,7 @@ const Button: React.FC<{ children: React.ReactNode; variant?: 'primary' | 'secon
 const App: React.FC = () => {
   const [view, setView] = useState<AppViewType>(AppView.LANDING);
   const [hasStarted, setHasStarted] = useState(false);
+  const [showKeyPicker, setShowKeyPicker] = useState(false);
   const [selectedSurah, setSelectedSurah] = useState<Surah | null>(null);
   const [selectedPrayer, setSelectedPrayer] = useState<DailyPrayer | null>(null);
   const [prayerImage, setPrayerImage] = useState<string | null>(null);
@@ -202,11 +204,34 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartApp = () => {
-    setHasStarted(true);
+  const handleStartApp = async () => {
     playClick();
+    // Cek apakah key sudah terpilih
+    const hasKey = await (window as any).aistudio?.hasSelectedApiKey();
+    if (!hasKey) {
+      setShowKeyPicker(true);
+      return;
+    }
+    setHasStarted(true);
     if (bgMusicRef.current && !isMuted) {
       bgMusicRef.current.play().catch(e => console.log("Music play blocked", e));
+    }
+  };
+
+  const handleSetKey = async () => {
+    playClick();
+    try {
+      if (typeof (window as any).aistudio?.openSelectKey === 'function') {
+        await (window as any).aistudio.openSelectKey();
+        // Berdasarkan aturan, asumsikan sukses dan lanjut
+        setShowKeyPicker(false);
+        setHasStarted(true);
+        setErrorNotice(null);
+        setIsPermissionError(false);
+        if (bgMusicRef.current && !isMuted) bgMusicRef.current.play().catch(() => {});
+      }
+    } catch (e) {
+      console.error("Open key dialog failed", e);
     }
   };
 
@@ -228,19 +253,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSetKey = async () => {
-    playClick();
-    try {
-      if (typeof (window as any).aistudio?.openSelectKey === 'function') {
-        await (window as any).aistudio.openSelectKey();
-        setErrorNotice(null);
-        setIsPermissionError(false);
-      }
-    } catch (e) {
-      console.error("Open key dialog failed", e);
-    }
-  };
-
   const playArabicAudio = async (base64Audio: string) => {
     ensureMusicPlaying();
     if (!base64Audio) return;
@@ -259,6 +271,19 @@ const App: React.FC = () => {
       source.start();
     } catch (err) {
       console.error("Audio playback error:", err);
+    }
+  };
+
+  const handleError = (err: any) => {
+    const msg = err.message || "";
+    if (msg === "PERMISSION_DENIED" || msg === "ENTITY_NOT_FOUND") {
+      setIsPermissionError(true);
+      setErrorNotice(msg === "ENTITY_NOT_FOUND" 
+        ? "Kunci API tidak ditemukan atau tidak valid. Silakan pilih API Key dari project berbayar Anda." 
+        : "Izin ditolak. Anda memerlukan API Key dari project berbayar untuk fitur ini."
+      );
+    } else {
+      setErrorNotice("Ups! Sinyal sedang lemah. Coba lagi ya!");
     }
   };
 
@@ -285,12 +310,7 @@ const App: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Failed to load prayer media", err);
-      if (err.message === "PERMISSION_DENIED") {
-        setIsPermissionError(true);
-        setErrorNotice("Gagal memuat gambar/audio. Klik tombol di bawah untuk memilih API Key berbayar Anda.");
-      } else {
-        setErrorNotice("Maaf, terjadi masalah koneksi saat memuat media.");
-      }
+      handleError(err);
     } finally {
       setItemLoading(false);
     }
@@ -309,10 +329,7 @@ const App: React.FC = () => {
       try {
         questions = await geminiService.generateQuizQuestions(category);
       } catch (err: any) {
-        if (err.message === "PERMISSION_DENIED") {
-          setIsPermissionError(true);
-          setErrorNotice("Kunci API bermasalah. Menggunakan soal cadangan.");
-        }
+        handleError(err);
         questions = STATIC_QUIZ_DATA[category] || [];
       }
       
@@ -355,8 +372,8 @@ const App: React.FC = () => {
       };
       setCurrentQuiz(updatedQuiz);
       if (audioData) playArabicAudio(audioData);
-    } catch (err) {
-      console.warn("Handled media load error");
+    } catch (err: any) {
+      console.warn("Media load error handled");
     } finally {
       setItemLoading(false);
     }
@@ -459,7 +476,7 @@ const App: React.FC = () => {
       ]);
       setTafsir(tafsirText);
       setVerses(versesRes.data.ayat);
-    } catch (err) {
+    } catch (err: any) {
       setErrorNotice("Gagal memuat surat.");
     } finally {
       setLoading(false);
@@ -475,23 +492,37 @@ const App: React.FC = () => {
     localStorage.setItem('alifbata_hifz', JSON.stringify(newProgress));
   };
 
-  if (!hasStarted) {
+  // UI Pemilihan Kunci API (Mandatory)
+  if (showKeyPicker || (!hasStarted && !showKeyPicker)) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-400 to-sky-500 flex flex-col items-center justify-center p-6 text-white z-[100] overflow-hidden">
         <BackgroundDecor />
         <div className="bg-white/20 backdrop-blur-lg p-8 rounded-[3rem] shadow-xl mb-8 animate-in zoom-in duration-500 relative">
            <Sparkles size={80} className="text-white animate-pulse" />
         </div>
-        <h1 className="text-4xl font-kids mb-4 text-center tracking-tight drop-shadow-lg">AlifBaTa Kids</h1>
-        <p className="text-emerald-50 text-lg mb-10 text-center max-w-xs opacity-95 font-sans">
-          Belajar Bahasa Arab & Juz 30 Seru!
-        </p>
-        <button 
-          onClick={handleStartApp}
-          className="bg-amber-400 text-amber-950 px-12 py-5 rounded-full font-kids text-2xl shadow-[0_8px_0_rgb(180,120,0)] flex items-center gap-4 hover:translate-y-1 active:translate-y-4 active:shadow-none transition-all z-10"
-        >
-          <PlayCircle size={32} /> Ayo Mulai!
-        </button>
+        <h1 className="text-4xl font-kids mb-2 text-center drop-shadow-lg">AlifBaTa Kids</h1>
+        <div className="max-w-xs bg-white/10 backdrop-blur-sm border border-white/20 p-6 rounded-[2rem] text-center mb-8">
+          <p className="text-sm mb-4 leading-relaxed font-sans">
+            Untuk mengaktifkan fitur gambar & suara ceria, aplikasi membutuhkan akses API Key Anda.
+          </p>
+          <a 
+            href="https://ai.google.dev/gemini-api/docs/billing" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-xs text-yellow-200 underline flex items-center justify-center gap-1 mb-6 hover:text-white transition-colors"
+          >
+            Info Penagihan & API Key <ExternalLink size={12}/>
+          </a>
+          <button 
+            onClick={showKeyPicker ? handleSetKey : handleStartApp}
+            className="w-full bg-amber-400 text-amber-950 px-8 py-4 rounded-full font-kids text-xl shadow-[0_6px_0_rgb(180,120,0)] flex items-center justify-center gap-3 hover:translate-y-1 active:translate-y-4 active:shadow-none transition-all"
+          >
+            <Key size={24} /> {showKeyPicker ? "Pilih API Key 🔑" : "Ayo Mulai! 🚀"}
+          </button>
+        </div>
+        {!showKeyPicker && (
+          <p className="text-[10px] text-emerald-100 opacity-60">Gratis & Tanpa Iklan</p>
+        )}
       </div>
     );
   }
@@ -545,15 +576,15 @@ const App: React.FC = () => {
           {isPermissionError && (
             <div className="px-2 pb-2">
               <Button variant="danger" className="w-full text-sm py-2" onClick={handleSetKey}>
-                Aktifkan API (Pilih Key) 🔑
+                Atur API Key (Pilih Lagi) 🔑
               </Button>
-              <p className="text-[10px] text-rose-400 mt-2 text-center">Fitur generatif gambar & suara memerlukan API Key dari project berbayar (GCP Billing).</p>
+              <p className="text-[10px] text-rose-400 mt-2 text-center">Pastikan API Key berasal dari project dengan Billing yang aktif.</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Landing View */}
+      {/* Main Views */}
       {view === AppView.LANDING && (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden border-b-[8px] border-emerald-700/20">
@@ -579,7 +610,7 @@ const App: React.FC = () => {
             </Card>
             
             <Card onClick={() => { playClick(); setView(AppView.DAILY_PRAYERS); }} className="col-span-2 border-rose-300 bg-rose-50 py-10 flex flex-col items-center">
-              <div className="bg-rose-400 p-5 rounded-3xl mb-4 text-white shadow-lg rotate-3 group-hover:rotate-0 transition-transform">
+              <div className="bg-rose-400 p-5 rounded-3xl mb-4 text-white shadow-lg rotate-3">
                 <Sparkles size={48} className="text-white" />
               </div>
               <h3 className="font-kids text-2xl text-rose-800">Doa Harian</h3>
@@ -603,7 +634,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Doa Harian - List Menu */}
+      {/* Doa Harian - List */}
       {view === AppView.DAILY_PRAYERS && !selectedPrayer && (
         <div className="space-y-4 animate-in slide-in-from-right duration-300">
           <h2 className="text-2xl font-kids text-rose-900 text-center mb-6">Doa Harian Anak Sholeh 🤲</h2>
@@ -612,7 +643,7 @@ const App: React.FC = () => {
               <button 
                 key={prayer.id} 
                 onClick={() => openPrayerDetail(prayer)}
-                className={`flex items-center justify-between p-5 rounded-[1.5rem] bg-white border-2 border-rose-100 border-b-[6px] active:translate-y-1 active:border-b-[2px] transition-all shadow-md group`}
+                className="flex items-center justify-between p-5 rounded-[1.5rem] bg-white border-2 border-rose-100 border-b-[6px] active:translate-y-1 active:border-b-[2px] transition-all shadow-md group"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 shadow-inner group-hover:scale-110 transition-transform">
@@ -633,7 +664,7 @@ const App: React.FC = () => {
           <div className="bg-white rounded-[2rem] p-6 shadow-lg border-b-[10px] border-rose-50 flex flex-col items-center">
             <h2 className="text-2xl font-kids text-rose-800 mb-6">{selectedPrayer.title}</h2>
             
-            <div className={`w-56 h-56 rounded-[2.5rem] mb-6 relative flex items-center justify-center shadow-md bg-gradient-to-br from-rose-100 to-rose-200 border-4 border-white shrink-0 overflow-hidden`}>
+            <div className="w-56 h-56 rounded-[2.5rem] mb-6 relative flex items-center justify-center shadow-md bg-gradient-to-br from-rose-100 to-rose-200 border-4 border-white shrink-0 overflow-hidden">
               {itemLoading ? (
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="animate-spin text-rose-400" size={40}/>
@@ -644,7 +675,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center">
                   <Sparkles size={80} className="text-rose-300 mb-2" />
-                  <p className="text-[10px] text-rose-300 px-4 text-center">Gambar tidak tersedia (Cek API Key)</p>
+                  <p className="text-[10px] text-rose-300 px-4 text-center">Gambar tidak tersedia</p>
                 </div>
               )}
             </div>
@@ -658,7 +689,7 @@ const App: React.FC = () => {
                 <button 
                   onClick={() => prayerAudio && playArabicAudio(prayerAudio)}
                   disabled={itemLoading || !prayerAudio}
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md active:translate-y-1 transition-all ${!prayerAudio ? 'bg-gray-100 text-gray-300' : 'bg-rose-400 text-white hover:bg-rose-500 shadow-rose-200'}`}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md active:translate-y-1 transition-all ${!prayerAudio ? 'bg-gray-100 text-gray-300' : 'bg-rose-400 text-white hover:bg-rose-500 shadow-rose-200 shadow-lg'}`}
                 >
                   {itemLoading ? <Loader2 className="animate-spin" /> : <Volume2 size={28}/>}
                 </button>
@@ -683,7 +714,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* View lainnya tetap sama (Quiz, Juz 30, Achievements) - disingkat untuk efisiensi XML */}
+      {/* Quiz Menu */}
       {view === AppView.QUIZ_MENU && (
         <div className="space-y-4 animate-in slide-in-from-right duration-300">
           <h2 className="text-2xl font-kids text-emerald-900 text-center mb-6">Pilih Tema Kuis 🗺️</h2>
@@ -711,6 +742,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Quiz Game */}
       {view === AppView.QUIZ_GAME && currentQuiz[quizIndex] && (
         <div className="space-y-4 animate-in zoom-in-95 duration-300">
           <div className="flex items-center justify-between px-2">
@@ -783,6 +815,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Juz 30 */}
       {view === AppView.JUZ_30 && !selectedSurah && (
         <div className="space-y-4 animate-in slide-in-from-bottom duration-500">
           <div className="bg-sky-400 rounded-[1.5rem] p-6 text-white shadow-lg border-b-[8px] border-sky-700/20">
@@ -826,7 +859,7 @@ const App: React.FC = () => {
 
           <div className="space-y-4 pt-4">
              {verses.map((v, i) => (
-               <div key={i} className={`bg-white rounded-[1.5rem] p-5 shadow-md border-b-[6px] transition-all ${playingAyat === i ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-50'}`}>
+               <div key={i} className={`bg-white rounded-[1.5rem] p-5 shadow-md border-b-[6px] transition-all ${playingAyat === i ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-100'}`}>
                  <div className="flex justify-between items-center mb-4">
                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center font-kids text-emerald-600 text-xs shadow-inner">{v.nomorAyat}</div>
                    <button 
