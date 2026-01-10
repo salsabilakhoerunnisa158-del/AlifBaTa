@@ -12,21 +12,20 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay =
     const errorMsg = error?.message || "";
     const errorMsgLower = errorMsg.toLowerCase();
     
-    // Aturan: Jika entitas tidak ditemukan, berarti project/key tidak valid atau belum disetup dengan benar
+    // Deteksi masalah API Key / Project
     const isEntityNotFound = errorMsgLower.includes('requested entity was not found');
     const isPermissionError = 
       errorMsgLower.includes('permission') || 
       errorMsgLower.includes('denied') || 
       errorMsgLower.includes('403') || 
-      errorMsgLower.includes('404');
+      errorMsgLower.includes('404') ||
+      errorMsgLower.includes('api_key_invalid');
     
     if (isEntityNotFound) {
-      console.error("Gemini API Error: Project/Entity not found. Need to re-select key.");
       throw new Error("ENTITY_NOT_FOUND");
     }
 
     if (isPermissionError) {
-      console.warn("Gemini API Error (Permission/Key):", errorMsg);
       throw new Error("PERMISSION_DENIED");
     }
 
@@ -47,14 +46,8 @@ export const geminiService = {
         model: "gemini-3-flash-preview",
         contents: `Generate exactly 10 multiple-choice quiz questions for children about Arabic vocabulary in the category: "${category}".
 Return the response in a strictly valid JSON array of objects format.
-Each object must have:
-- "question": (string) "Apa bahasa Arabnya [Indonesian Word]?"
-- "arabicWord": (string) The word in Arabic script with harakat.
-- "options": (array of 4 strings) in Latin.
-- "correctAnswer": (string) The correct Latin transliteration.
-- "imagePrompt": (string) A simple visual description.`,
+Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
         config: {
-          thinkingConfig: { thinkingBudget: 0 },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -74,19 +67,18 @@ Each object must have:
       });
       
       const text = response.text;
-      if (!text) return [];
-      const parsed = JSON.parse(text);
-      return Array.isArray(parsed) ? parsed : [];
+      return JSON.parse(text || "[]");
     });
   },
 
   async generateImage(prompt: string): Promise<string | undefined> {
-    return withRetry(async () => {
+    // Mencoba model Pro terlebih dahulu, jika gagal (misal: bukan paid key), biarkan UI menggunakan fallback icon
+    try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: {
-          parts: [{ text: `High quality children's book illustration, vibrant colors, soft 3D digital art style, clean lines, simple background, joyful atmosphere: ${prompt}` }],
+          parts: [{ text: `Cute 3D cartoon style for kids: ${prompt}. White background.` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1", imageSize: "1K" }
@@ -95,7 +87,10 @@ Each object must have:
       
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
-    });
+    } catch (e) {
+      console.warn("Image generation failed, using fallback icon.");
+      return undefined; 
+    }
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
@@ -103,7 +98,7 @@ Each object must have:
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Sebutkan dengan suara anak-anak yang ceria dan perlahan: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan jelas dan ceria: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -123,9 +118,9 @@ Each object must have:
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Jelaskan kisah singkat dan menarik dari Surah ${surahName} untuk anak-anak TK/SD. Gunakan bahasa yang ceria dan mendidik (maks 80 kata).`,
+        contents: `Apa pelajaran dari Surah ${surahName} untuk anak kecil? Gunakan bahasa yang sangat sederhana (maks 60 kata).`,
       });
-      return response.text || "Cerita indah tentang surat ini akan segera muncul!";
+      return response.text || "Cerita indah akan segera hadir!";
     });
   }
 };
