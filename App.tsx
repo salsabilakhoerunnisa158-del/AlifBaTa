@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppView, AppViewType, Surah, QuizQuestion, Verse } from './types';
-import { JUZ_30_SURAHS, STATIC_QUIZ_DATA } from './constants';
+import { AppView, AppViewType, Surah, QuizQuestion, Verse, DailyPrayer } from './types';
+import { JUZ_30_SURAHS, STATIC_QUIZ_DATA, DAILY_PRAYERS } from './constants';
 import { geminiService } from './services/geminiService';
 import { 
   BookOpen, 
@@ -133,6 +133,10 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppViewType>(AppView.LANDING);
   const [hasStarted, setHasStarted] = useState(false);
   const [selectedSurah, setSelectedSurah] = useState<Surah | null>(null);
+  const [selectedPrayer, setSelectedPrayer] = useState<DailyPrayer | null>(null);
+  const [prayerImage, setPrayerImage] = useState<string | null>(null);
+  const [prayerAudio, setPrayerAudio] = useState<string | null>(null);
+  
   const [hifzProgress, setHifzProgress] = useState<number[]>([]);
   const [currentQuiz, setCurrentQuiz] = useState<QuizQuestion[]>([]);
   const [currentCategory, setCurrentCategory] = useState<string>("");
@@ -255,6 +259,32 @@ const App: React.FC = () => {
       source.start();
     } catch (err) {
       console.error("Audio playback error:", err);
+    }
+  };
+
+  const openPrayerDetail = async (prayer: DailyPrayer) => {
+    playClick();
+    ensureMusicPlaying();
+    setSelectedPrayer(prayer);
+    setPrayerImage(null);
+    setPrayerAudio(null);
+    setItemLoading(true);
+    
+    try {
+      const [imgData, audioData] = await Promise.all([
+        geminiService.generateImage(prayer.imagePrompt),
+        geminiService.generateSpeech(prayer.arabic)
+      ]);
+      
+      if (imgData) setPrayerImage(`data:image/png;base64,${imgData}`);
+      if (audioData) {
+        setPrayerAudio(audioData);
+        playArabicAudio(audioData);
+      }
+    } catch (err) {
+      console.warn("Failed to load prayer media");
+    } finally {
+      setItemLoading(false);
     }
   };
 
@@ -468,7 +498,7 @@ const App: React.FC = () => {
       {/* Navbar - Optimized Size */}
       <div className="flex items-center justify-between mb-6 sticky top-2 z-50 bg-white/80 backdrop-blur-lg p-3 rounded-[2rem] border-2 border-white/50 shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2 rounded-xl shadow-md cursor-pointer" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); }}>
+          <div className="bg-gradient-to-tr from-emerald-400 to-emerald-600 p-2 rounded-xl shadow-md cursor-pointer" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); }}>
             <Sparkles className="text-white w-5 h-5" />
           </div>
           <h1 className="text-xl font-kids gradient-text">AlifBaTa</h1>
@@ -487,6 +517,7 @@ const App: React.FC = () => {
               onClick={() => {
                 playClick();
                 if (selectedSurah) setSelectedSurah(null);
+                else if (selectedPrayer) setSelectedPrayer(null);
                 else setView(AppView.LANDING);
               }}
               className="p-3 bg-white rounded-xl shadow-sm text-emerald-600 border-2 border-emerald-100"
@@ -514,13 +545,13 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Landing - Compact Layout */}
+      {/* Landing - Compact Layout with Doa Section */}
       {view === AppView.LANDING && (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden border-b-[8px] border-emerald-700/20">
             <h2 className="text-3xl font-kids mb-2 drop-shadow-sm">Assalamu'alaikum! 👋</h2>
             <p className="text-emerald-50 text-lg font-medium font-sans">
-              Ayo kumpulkan bintang dan belajar bahasa Arab!
+              Ayo kumpulkan bintang dan belajar hal seru!
             </p>
           </div>
 
@@ -538,6 +569,14 @@ const App: React.FC = () => {
               </div>
               <h3 className="font-kids text-xl text-sky-800">Juz 30</h3>
             </Card>
+            
+            <Card onClick={() => { playClick(); setView(AppView.DAILY_PRAYERS); }} className="col-span-2 border-rose-300 bg-rose-50 py-10 flex flex-col items-center">
+              <div className="bg-rose-400 p-5 rounded-3xl mb-4 text-white shadow-lg rotate-3 group-hover:rotate-0 transition-transform">
+                <Sparkles size={48} className="text-white" />
+              </div>
+              <h3 className="font-kids text-2xl text-rose-800">Doa Harian</h3>
+              <p className="text-rose-400 text-sm font-bold mt-2 uppercase">Bangun Tidur s/d Tidur Lagi</p>
+            </Card>
           </div>
 
           <div className="bg-white/50 backdrop-blur-sm p-6 rounded-[2rem] border-2 border-white/50 shadow-lg">
@@ -553,6 +592,83 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Doa Harian - List Menu */}
+      {view === AppView.DAILY_PRAYERS && !selectedPrayer && (
+        <div className="space-y-4 animate-in slide-in-from-right duration-300">
+          <h2 className="text-2xl font-kids text-rose-900 text-center mb-6">Doa Harian Anak Sholeh 🤲</h2>
+          <div className="grid grid-cols-1 gap-3">
+            {DAILY_PRAYERS.map((prayer, idx) => (
+              <button 
+                key={prayer.id} 
+                onClick={() => openPrayerDetail(prayer)}
+                className={`flex items-center justify-between p-5 rounded-[1.5rem] bg-white border-2 border-rose-100 border-b-[6px] active:translate-y-1 active:border-b-[2px] transition-all shadow-md group`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 shadow-inner group-hover:scale-110 transition-transform">
+                    <Sparkles size={24} />
+                  </div>
+                  <span className="text-lg font-kids text-gray-700">{prayer.title}</span>
+                </div>
+                <ChevronRight size={24} className="text-gray-300" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Doa Detail */}
+      {selectedPrayer && (
+        <div className="space-y-6 animate-in slide-in-from-bottom duration-500 pb-10">
+          <div className="bg-white rounded-[2rem] p-6 shadow-lg border-b-[10px] border-rose-50 flex flex-col items-center">
+            <h2 className="text-2xl font-kids text-rose-800 mb-6">{selectedPrayer.title}</h2>
+            
+            <div className={`w-56 h-56 rounded-[2.5rem] mb-6 relative flex items-center justify-center shadow-md bg-gradient-to-br from-rose-100 to-rose-200 border-4 border-white shrink-0 overflow-hidden`}>
+              {itemLoading ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="animate-spin text-rose-400" size={40}/>
+                  <p className="text-rose-400 font-kids text-sm">Menyiapkan Gambar...</p>
+                </div>
+              ) : prayerImage ? (
+                <img src={prayerImage} alt="Visual" className="w-full h-full object-cover" />
+              ) : (
+                <Sparkles size={80} className="text-rose-300" />
+              )}
+            </div>
+
+            <div className="flex flex-col items-center w-full">
+              <div className="font-arabic text-3xl text-center leading-loose text-emerald-700 mb-6 px-2 select-all" dir="rtl">
+                {selectedPrayer.arabic}
+              </div>
+              
+              <div className="flex items-center gap-4 mb-6">
+                <button 
+                  onClick={() => prayerAudio && playArabicAudio(prayerAudio)}
+                  disabled={itemLoading || !prayerAudio}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md active:translate-y-1 transition-all ${!prayerAudio ? 'bg-gray-100 text-gray-300' : 'bg-rose-400 text-white hover:bg-rose-500 shadow-rose-200'}`}
+                >
+                  <Volume2 size={28}/>
+                </button>
+                <p className="text-rose-600 font-kids text-sm">Dengarkan Audio</p>
+              </div>
+
+              <div className="w-full space-y-4 text-center">
+                <div className="p-4 bg-rose-50/50 rounded-2xl border-2 border-white">
+                  <p className="text-rose-800 font-sans font-bold italic text-sm mb-1">{selectedPrayer.latin}</p>
+                </div>
+                <div className="p-4 bg-emerald-50/50 rounded-2xl border-2 border-white">
+                  <h4 className="text-emerald-800 font-kids text-xs uppercase tracking-widest mb-2 opacity-50">Terjemahan</h4>
+                  <p className="text-emerald-900 text-sm font-sans leading-relaxed">{selectedPrayer.translation}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <Button className="w-full text-xl py-6 rounded-full shadow-xl" onClick={() => setSelectedPrayer(null)} variant="primary">
+            Kembali ke Daftar 📋
+          </Button>
         </div>
       )}
 
@@ -689,7 +805,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Surah Detail - Suara Jernih (Index 05) */}
+      {/* Surah Detail */}
       {selectedSurah && (
         <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 pb-20">
           <div className="bg-white rounded-[2rem] p-6 shadow-md text-center border-b-[10px] border-emerald-50 flex flex-col items-center">

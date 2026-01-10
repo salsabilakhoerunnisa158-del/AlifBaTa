@@ -1,12 +1,12 @@
 
-import { ArabicWord, Surah, QuizQuestion } from './types';
+import { ArabicWord, Surah, QuizQuestion, DailyPrayer } from './types';
 
 export const JUZ_30_SURAHS: Surah[] = [
   { number: 78, name: "النبا", transliteration: "An-Naba", translation: "Berita Besar", totalVerses: 40, revelationType: 'Meccan' },
   { number: 79, name: "النازعات", transliteration: "An-Nazi'at", translation: "Malaikat-Malaikat Yang Mencabut", totalVerses: 46, revelationType: 'Meccan' },
   { number: 80, name: "عبس", transliteration: "Abasa", translation: "Ia Bermuka Masam", totalVerses: 42, revelationType: 'Meccan' },
   { number: 81, name: "التكوير", transliteration: "At-Takwir", translation: "Menggulung", totalVerses: 29, revelationType: 'Meccan' },
-  { number: 82, name: "الانفطار", transliteration: "Al-Infitar", translation: "Terbelah", totalVerses: 19, revelationType: 'Meccan' },
+  { number: 82, name: "الانfطار", transliteration: "Al-Infitar", translation: "Terbelah", totalVerses: 19, revelationType: 'Meccan' },
   { number: 83, name: "المطففين", transliteration: "Al-Mutaffifin", translation: "Orang-Orang Yang Curang", totalVerses: 36, revelationType: 'Meccan' },
   { number: 84, name: "الانشقاق", transliteration: "Al-Inshiqaq", translation: "Terbelah", totalVerses: 25, revelationType: 'Meccan' },
   { number: 85, name: "البروج", transliteration: "Al-Buruj", translation: "Gugusan Bintang", totalVerses: 22, revelationType: 'Meccan' },
@@ -39,6 +39,65 @@ export const JUZ_30_SURAHS: Surah[] = [
   { number: 112, name: "الإخلاص", transliteration: "Al-Ikhlas", translation: "Ikhlas", totalVerses: 4, revelationType: 'Meccan' },
   { number: 113, name: "الفلق", transliteration: "Al-Falaq", translation: "Waktu Subuh", totalVerses: 5, revelationType: 'Meccan' },
   { number: 114, name: "الناس", transliteration: "An-Nas", translation: "Manusia", totalVerses: 6, revelationType: 'Meccan' },
+];
+
+export const DAILY_PRAYERS: DailyPrayer[] = [
+  {
+    id: 'bangun-tidur',
+    title: 'Doa Bangun Tidur',
+    arabic: 'اَلْحَمْدُ لِلّٰهِ الَّذِيْ أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُوْرُ',
+    latin: 'Alhamdu lillahil ladzii ahyaanaa ba\'da maa amaatanaa wa ilaihin nusyuur.',
+    translation: 'Segala puji bagi Allah yang menghidupkan kami setelah mematikan kami dan kepada-Nya kami kembali.',
+    imagePrompt: 'A cute kid waking up happily in a cozy bed with sun shining through window'
+  },
+  {
+    id: 'masuk-wc',
+    title: 'Doa Masuk Kamar Mandi',
+    arabic: 'اللّٰهُمَّ إِنِّيْ أَعُوْذُ بِكَ مِنَ الْخُبُثِ وَالْخَبَائِثِ',
+    latin: 'Alloohumma innii a\'uudzu bika minal khubutsi wal khobaaits.',
+    translation: 'Ya Allah, aku berlindung pada-Mu dari godaan setan laki-laki dan setan perempuan.',
+    imagePrompt: 'A cute kid entering a clean bathroom'
+  },
+  {
+    id: 'keluar-wc',
+    title: 'Doa Keluar Kamar Mandi',
+    arabic: 'غُفْرَانَكَ الْحَمْدُ لِلّٰهِ الَّذِيْ أَذْهَبَ عَنِّى الْأَذَى وَعَافَانِيْ',
+    latin: 'Ghufroonaka alhamdu lillaahil ladzii adzhaba \'annil adzaa wa \'aafaanii.',
+    translation: 'Aku mohon ampunan-Mu. Segala puji bagi Allah yang telah menghilangkan kotoran dariku dan menyehatkanku.',
+    imagePrompt: 'A cute kid exiting bathroom feeling fresh'
+  },
+  {
+    id: 'sebelum-makan',
+    title: 'Doa Sebelum Makan',
+    arabic: 'اللّٰهُمَّ بَارِكْ لَنَا فِيْمَا رَزَقْتَنَا وَقِنَا عَذَابَ النَّارِ',
+    latin: 'Alloohumma baarik lanaa fiimaa rozaqtanaa wa qinaa \'adzaaban naar.',
+    translation: 'Ya Allah, berkahilah kami atas rezeki yang Engkau berikan dan peliharalah kami dari siksa api neraka.',
+    imagePrompt: 'A cute kid sitting at a table with delicious healthy food'
+  },
+  {
+    id: 'sesudah-makan',
+    title: 'Doa Sesudah Makan',
+    arabic: 'اَلْحَمْدُ لِلّٰهِ الَّذِيْ أَطْعَمَنَا وَسَقَانَا وَجَعَلَنَا مُسْلِمِيْنَ',
+    latin: 'Alhamdu lillahil ladzii ath\'amanaa wa saqoonaa wa ja\'alanaa muslimiin.',
+    translation: 'Segala puji bagi Allah yang telah memberi kami makan dan minum, serta menjadikan kami orang-orang muslim.',
+    imagePrompt: 'A cute kid finishing meal with a happy smile'
+  },
+  {
+    id: 'untuk-ortu',
+    title: 'Doa Untuk Orang Tua',
+    arabic: 'رَبِّ اغْفِرْ لِيْ وَلِوَالِدَيَّ وَارْحَمْهُمَا كَمَا رَبَّيَانِيْ صَغِيْرًا',
+    latin: 'Rabbighfir lii waliwaalidayya warhamhumaa kamaa rabbayaanii shaghiiraa.',
+    translation: 'Ya Tuhanku, ampunilah dosaku dan dosa kedua orang tuaku, dan sayangilah mereka sebagaimana mereka menyayangiku di waktu kecil.',
+    imagePrompt: 'A cute kid hugging their parents with hearts'
+  },
+  {
+    id: 'sebelum-tidur',
+    title: 'Doa Sebelum Tidur',
+    arabic: 'بِاسْمِكَ اللّٰهُمَّ أَحْيَا وَأَمُوْتُ',
+    latin: 'Bismika alloohumma ahyaa wa amuutu.',
+    translation: 'Dengan nama-Mu ya Allah, aku hidup dan aku mati.',
+    imagePrompt: 'A cute kid sleeping peacefully under a starry sky blanket'
+  }
 ];
 
 export const STATIC_QUIZ_DATA: Record<string, QuizQuestion[]> = {

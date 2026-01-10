@@ -13,8 +13,18 @@ export interface Verse {
   teksLatin: string;
   teksIndonesia: string;
   audio: {
-    "01": string; // Mishary Rashid Al-Afasy
+    "01": string;
+    "05": string;
   };
+}
+
+export interface DailyPrayer {
+  id: string;
+  title: string;
+  arabic: string;
+  latin: string;
+  translation: string;
+  imagePrompt: string;
 }
 
 export interface QuizQuestion {
@@ -41,6 +51,7 @@ export const AppView = {
   QUIZ_MENU: 'QUIZ_MENU',
   QUIZ_GAME: 'QUIZ_GAME',
   JUZ_30: 'JUZ_30',
+  DAILY_PRAYERS: 'DAILY_PRAYERS',
   ACHIEVEMENTS: 'ACHIEVEMENTS'
 } as const;
 
