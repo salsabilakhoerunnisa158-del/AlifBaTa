@@ -53,10 +53,11 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
   async generateImage(prompt: string): Promise<string | undefined> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Prompt dibuat lebih eksplisit agar model Flash-Image lebih mudah memprosesnya
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A very simple, cute, 3D clay-style cartoon illustration of a ${prompt} for a children's book. Bright colors, white background, no text, clean look, high quality.` }],
+          parts: [{ text: `A vibrant, high-quality, cute 3D cartoon illustration of ${prompt}. Clean white background, kid-friendly style, 4k resolution, no text.` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -76,7 +77,7 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan sangat jelas dan ceria: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan sangat jelas, pelan, dan ceria: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {

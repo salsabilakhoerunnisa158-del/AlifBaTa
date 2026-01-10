@@ -157,11 +157,11 @@ const App: React.FC = () => {
 
     clickAudioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3");
     
-    // Suara Benar & Salah yang lebih stabil
-    correctSfxRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3");
+    // Gunakan URL audio yang lebih stabil dan dipastikan bisa diakses publik
+    correctSfxRef.current = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_78330a6e38.mp3"); // Suara ding/success
     correctSfxRef.current.crossOrigin = "anonymous";
     
-    wrongSfxRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3");
+    wrongSfxRef.current = new Audio("https://cdn.pixabay.com/audio/2022/03/10/audio_c356133068.mp3"); // Suara oof/wrong
     wrongSfxRef.current.crossOrigin = "anonymous";
 
     return () => {
@@ -242,16 +242,23 @@ const App: React.FC = () => {
     if (!q) return;
     setItemLoading(true);
     try {
+      // Prioritaskan audio dulu agar segera terdengar, lalu gambar
       const [imgData, audioData] = await Promise.allSettled([
         geminiService.generateImage(q.imagePrompt),
         geminiService.generateSpeech(q.arabicWord)
       ]);
-      const updatedQuiz = [...questions];
+      
       const imgVal = imgData.status === 'fulfilled' ? imgData.value : undefined;
       const audioVal = audioData.status === 'fulfilled' ? audioData.value : undefined;
-      updatedQuiz[index] = { ...q, generatedImage: imgVal ? `data:image/png;base64,${imgVal}` : undefined, audioData: audioVal };
+      
+      const updatedQuiz = [...questions];
+      updatedQuiz[index] = { 
+        ...q, 
+        generatedImage: imgVal ? `data:image/png;base64,${imgVal}` : undefined, 
+        audioData: audioVal 
+      };
+      
       setCurrentQuiz(updatedQuiz);
-      // Putar audio secara otomatis saat soal muncul
       if (audioVal) playArabicAudio(audioVal);
     } catch (err) {
       console.warn("Media loading issue", err);
@@ -264,16 +271,17 @@ const App: React.FC = () => {
     setSelectedOption(answer);
     const isCorrect = answer === currentQuiz[quizIndex].correctAnswer;
     
+    // Mainkan sound feedback
     if (isCorrect) {
       setScore(s => s + 10);
       if (correctSfxRef.current) { 
         correctSfxRef.current.currentTime = 0; 
-        correctSfxRef.current.play().catch(() => {}); 
+        correctSfxRef.current.play().catch(e => console.warn("Error playing correct sfx", e)); 
       }
     } else {
       if (wrongSfxRef.current) { 
         wrongSfxRef.current.currentTime = 0; 
-        wrongSfxRef.current.play().catch(() => {}); 
+        wrongSfxRef.current.play().catch(e => console.warn("Error playing wrong sfx", e)); 
       }
     }
 
@@ -351,7 +359,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen pb-20 max-w-lg mx-auto px-4 pt-8 relative z-10 font-sans">
+    <div className={`min-h-screen pb-20 max-w-lg mx-auto px-4 pt-8 relative z-10 font-sans transition-colors duration-500 ${answering ? (selectedOption === currentQuiz[quizIndex]?.correctAnswer ? 'bg-emerald-50' : 'bg-rose-50') : ''}`}>
       <BackgroundDecor />
       
       {/* Navbar */}
@@ -431,7 +439,7 @@ const App: React.FC = () => {
             <div className="bg-amber-400 px-6 py-2.5 rounded-full text-amber-950 font-kids text-lg shadow-xl border-b-4 border-amber-600 flex items-center gap-2">{score} <Star size={20} fill="currentColor"/></div>
           </div>
           
-          <div className="bg-white rounded-[3rem] p-8 shadow-2xl text-center border-b-[12px] border-gray-50 flex flex-col items-center">
+          <div className={`bg-white rounded-[3rem] p-8 shadow-2xl text-center border-b-[12px] border-gray-50 flex flex-col items-center transition-transform duration-300 ${answering && selectedOption !== currentQuiz[quizIndex].correctAnswer ? 'animate-shake' : ''}`}>
             <div className={`w-64 h-64 rounded-[3rem] mb-8 relative flex items-center justify-center shadow-2xl bg-gradient-to-br ${getCategoryColors(currentCategory)} border-4 border-white shrink-0 overflow-hidden`}>
               {itemLoading ? (
                 <div className="flex flex-col items-center gap-3">
@@ -441,7 +449,10 @@ const App: React.FC = () => {
               ) : currentQuiz[quizIndex].generatedImage ? (
                 <img src={currentQuiz[quizIndex].generatedImage} className="w-full h-full object-cover animate-in fade-in duration-500" alt="Quiz"/>
               ) : (
-                <CategoryIcon category={currentCategory} size={100} />
+                <div className="flex flex-col items-center gap-2">
+                   <CategoryIcon category={currentCategory} size={100} />
+                   <p className="text-white/60 text-xs font-kids">Gambar menyusul...</p>
+                </div>
               )}
             </div>
             
@@ -473,6 +484,7 @@ const App: React.FC = () => {
                   </div>
                   <span className="flex-1">{option}</span>
                   {answering && isCorrect && isSelected && <CheckCircle2 size={24} className="text-white animate-bounce" />}
+                  {answering && !isCorrect && isSelected && <X size={24} className="text-white" />}
                 </button>
               );
             })}
@@ -480,7 +492,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Other views (Juz 30, Prayers, Achievements) remain styled correctly ... */}
+      {/* View list ... */}
       {(view === AppView.QUIZ_MENU || view === AppView.JUZ_30 || view === AppView.DAILY_PRAYERS) && !selectedSurah && !selectedPrayer && (
         <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-10">
           <div className={`rounded-[2.5rem] p-8 text-white shadow-2xl ${view === AppView.QUIZ_MENU ? 'bg-amber-400' : view === AppView.JUZ_30 ? 'bg-sky-400' : 'bg-rose-400'}`}>
