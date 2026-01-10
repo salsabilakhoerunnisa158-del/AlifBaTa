@@ -170,7 +170,7 @@ const App: React.FC = () => {
 
     bgMusicRef.current = new Audio("https://cdn.pixabay.com/audio/2022/10/30/audio_517935f111.mp3"); 
     bgMusicRef.current.loop = true;
-    bgMusicRef.current.volume = 0.1; 
+    bgMusicRef.current.volume = 0.08; 
 
     clickAudioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3");
     clickAudioRef.current.volume = 0.2;
@@ -359,27 +359,60 @@ const App: React.FC = () => {
   const playAyatAudio = (index: number) => {
     playClick();
     ensureMusicPlaying();
+    
+    // Hentikan murottal jika sedang diputar
     if (playingAyat === index) {
       if (ayatAudioRef.current) {
         ayatAudioRef.current.pause();
+        ayatAudioRef.current = null;
         setPlayingAyat(null);
       }
       return;
     }
+
     setLoadingAyat(index);
-    const audioUrl = verses[index].audio["01"];
-    if (ayatAudioRef.current) ayatAudioRef.current.pause();
+    
+    // Pilih qori index '05' (Mishary Rashid Al-Afasy) untuk kejernihan suara terbaik
+    const audioUrl = verses[index].audio["05"] || verses[index].audio["01"];
+    
+    if (ayatAudioRef.current) {
+      ayatAudioRef.current.pause();
+      ayatAudioRef.current = null;
+    }
+
     const audio = new Audio(audioUrl);
+    audio.preload = "auto";
     ayatAudioRef.current = audio;
-    audio.onplay = () => { setLoadingAyat(null); setPlayingAyat(index); };
-    audio.onended = () => { setPlayingAyat(null); };
-    audio.onerror = () => { setLoadingAyat(null); };
-    audio.play().catch(() => setLoadingAyat(null));
+
+    audio.onplay = () => { 
+      setLoadingAyat(null); 
+      setPlayingAyat(index); 
+    };
+    
+    audio.onended = () => { 
+      setPlayingAyat(null); 
+      ayatAudioRef.current = null;
+    };
+    
+    audio.onerror = () => { 
+      setLoadingAyat(null); 
+      setErrorNotice("Gagal memutar murottal jernih. Coba lagi.");
+    };
+
+    audio.play().catch((e) => {
+      console.error("Playback failed", e);
+      setLoadingAyat(null);
+    });
   };
 
   const openSurahDetail = async (surah: Surah) => {
     playClick();
     ensureMusicPlaying();
+    if (ayatAudioRef.current) {
+      ayatAudioRef.current.pause();
+      ayatAudioRef.current = null;
+    }
+    setPlayingAyat(null);
     setSelectedSurah(surah);
     setTafsir("");
     setVerses([]);
@@ -656,43 +689,46 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Surah Detail - Reduced sizes */}
+      {/* Surah Detail - Suara Jernih (Index 05) */}
       {selectedSurah && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-white rounded-[2rem] p-8 shadow-md text-center border-b-[10px] border-emerald-50">
-            <div className="font-arabic text-6xl text-emerald-600 mb-4">{selectedSurah.name}</div>
-            <h2 className="text-3xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
-            <p className="text-lg text-gray-400 italic">"{selectedSurah.translation}"</p>
+        <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 pb-20">
+          <div className="bg-white rounded-[2rem] p-6 shadow-md text-center border-b-[10px] border-emerald-50 flex flex-col items-center">
+            <div className="font-arabic text-5xl text-emerald-600 mb-2">{selectedSurah.name}</div>
+            <h2 className="text-2xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
+            <p className="text-sm text-gray-400 italic">"{selectedSurah.translation}"</p>
           </div>
 
-          <div className="bg-emerald-50/50 p-6 rounded-[2rem] border-2 border-white shadow-sm">
-            <h3 className="text-lg font-kids text-emerald-800 mb-3 flex items-center gap-2">
-              <Sparkles size={20} className="text-amber-400"/> Kisah Singkat
+          <div className="bg-emerald-50/70 p-5 rounded-[1.5rem] border-2 border-white shadow-sm">
+            <h3 className="text-base font-kids text-emerald-800 mb-2 flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-400"/> Kisah Singkat
             </h3>
-            {loading ? <Loader2 className="animate-spin text-emerald-400 mx-auto" /> : <p className="text-emerald-900 text-base font-sans">{tafsir}</p>}
+            {loading ? <Loader2 className="animate-spin text-emerald-400 mx-auto" /> : <p className="text-emerald-900 text-sm font-sans leading-relaxed">{tafsir}</p>}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4">
              {verses.map((v, i) => (
-               <div key={i} className="bg-white rounded-[2rem] p-6 shadow-md border-b-[8px] border-gray-50">
-                 <div className="flex justify-between items-center mb-6">
-                   <div className="w-10 h-10 rounded-full bg-emerald-400 flex items-center justify-center font-kids text-white text-sm">{v.nomorAyat}</div>
+               <div key={i} className={`bg-white rounded-[1.5rem] p-5 shadow-md border-b-[6px] transition-all ${playingAyat === i ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-50'}`}>
+                 <div className="flex justify-between items-center mb-4">
+                   <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center font-kids text-emerald-600 text-xs shadow-inner">{v.nomorAyat}</div>
                    <button 
                     onClick={() => playAyatAudio(i)}
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md active:translate-y-1 ${playingAyat === i ? 'bg-amber-400 text-white' : 'bg-emerald-400 text-white'}`}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md active:translate-y-1 transition-all ${playingAyat === i ? 'bg-amber-400 text-white animate-pulse' : 'bg-emerald-400 text-white hover:bg-emerald-500'}`}
                    >
-                     {loadingAyat === i ? <Loader2 className="animate-spin" size={20}/> : <Volume2 size={24}/>}
+                     {loadingAyat === i ? <Loader2 className="animate-spin" size={18}/> : playingAyat === i ? <VolumeX size={20}/> : <Volume2 size={20}/>}
                    </button>
                  </div>
-                 <div className="text-right font-arabic text-3xl leading-relaxed text-gray-800 mb-6" dir="rtl">{v.teksArab}</div>
-                 <p className="text-gray-700 text-base font-sans leading-snug">{v.teksIndonesia}</p>
+                 <div className="text-right font-arabic text-3xl leading-loose text-gray-800 mb-4 select-all" dir="rtl">{v.teksArab}</div>
+                 <p className="text-gray-700 text-sm font-sans leading-snug font-medium italic mb-2">{v.teksLatin}</p>
+                 <p className="text-gray-600 text-sm font-sans leading-relaxed">{v.teksIndonesia}</p>
                </div>
              ))}
           </div>
 
-          <Button className="w-full text-xl py-6 rounded-[2rem]" onClick={() => toggleHifz(selectedSurah!.number)} variant={hifzProgress.includes(selectedSurah!.number) ? 'primary' : 'secondary'}>
-            {hifzProgress.includes(selectedSurah!.number) ? 'Sudah Hafal! ✅' : 'Tandai Hafal 💖'}
-          </Button>
+          <div className="fixed bottom-6 left-0 right-0 px-4 z-40 max-w-lg mx-auto">
+            <Button className="w-full text-lg py-4 rounded-full shadow-2xl" onClick={() => toggleHifz(selectedSurah!.number)} variant={hifzProgress.includes(selectedSurah!.number) ? 'primary' : 'secondary'}>
+              {hifzProgress.includes(selectedSurah!.number) ? 'Sudah Hafal! ✅' : 'Tandai Hafal 💖'}
+            </Button>
+          </div>
         </div>
       )}
 
