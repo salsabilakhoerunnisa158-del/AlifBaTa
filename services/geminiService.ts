@@ -5,6 +5,37 @@ import { QuizQuestion } from "../types";
 const RETRY_DELAY = 1000;
 const MAX_RETRIES = 1;
 
+// Helper untuk decode base64 ke Uint8Array (Manual sesuai regulasi)
+function decodeBase64(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// Helper untuk convert Raw PCM ke AudioBuffer
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number = 24000,
+  numChannels: number = 1,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES, delay = RETRY_DELAY): Promise<T> {
   try {
     return await fn();
@@ -25,7 +56,8 @@ export const geminiService = {
         model: "gemini-3-flash-preview",
         contents: `Generate exactly 5 multiple-choice quiz questions for children about Arabic vocabulary in the category: "${category}".
 Return the response in a strictly valid JSON array of objects format.
-Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
+Translate the word to Indonesian for the question.
+Example: { "question": "Apa bahasa Arabnya Gajah?", "arabicWord": "فِيْلٌ", "options": ["Fiilun", "Asadun", "Qittun", "Jamalun"], "correctAnswer": "Fiilun", "imagePrompt": "elephant" }`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -53,11 +85,10 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
   async generateImage(prompt: string): Promise<string | undefined> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Gunakan prompt yang sangat spesifik dan aman untuk anak-anak
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A cute colorful cartoon illustration of ${prompt}, high quality, clean white background, simple shapes, 3D style for kids, no text, no words.` }],
+          parts: [{ text: `A simple, cute, high-quality cartoon 3D illustration of a ${prompt} for children, isolated on white background, bright colors.` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -67,29 +98,17 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
-      console.error("Image gen failed, trying fallback:", prompt, e);
-      try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const retryResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: {
-            parts: [{ text: `Simple drawing of ${prompt} for children.` }],
-          }
-        });
-        const retryPart = retryResponse.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-        return retryPart?.inlineData?.data;
-      } catch (innerE) {
-        return undefined;
-      }
+      console.error("Image generation failed:", e);
+      return undefined;
     }
   },
 
-  async generateSpeech(text: string): Promise<string | undefined> {
-    return withRetry(async () => {
+  async playSpeech(text: string, audioCtx: AudioContext) {
+    try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan ceria: ${text}` }] }],
+        contents: [{ parts: [{ text: `${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -100,8 +119,18 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
         },
       });
       
-      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    });
+      const base64Data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Data) {
+        const audioData = decodeBase64(base64Data);
+        const buffer = await decodeAudioData(audioData, audioCtx);
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        source.start();
+      }
+    } catch (e) {
+      console.error("Speech playback failed:", e);
+    }
   },
 
   async getSurahTafsirForKids(surahName: string): Promise<string> {
@@ -109,9 +138,9 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Apa pelajaran dari Surah ${surahName} untuk anak kecil? Gunakan bahasa yang sangat sederhana (maks 50 kata).`,
+        contents: `Apa pelajaran dari Surah ${surahName} untuk anak kecil? Gunakan bahasa yang sangat sederhana dan memotivasi (maks 40 kata).`,
       });
-      return response.text || "Pelajaran indah dari Allah.";
+      return response.text || "Pelajaran indah dari Allah untuk anak sholeh.";
     });
   }
 };
