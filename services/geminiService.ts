@@ -23,7 +23,7 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Generate exactly 10 multiple-choice quiz questions for children about Arabic vocabulary in the category: "${category}".
+        contents: `Generate exactly 5 multiple-choice quiz questions for children about Arabic vocabulary in the category: "${category}".
 Return the response in a strictly valid JSON array of objects format.
 Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
         config: {
@@ -53,12 +53,11 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
   async generateImage(prompt: string): Promise<string | undefined> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Prompt disesuaikan agar gayanya mirip dengan maskot (3D Chibi / Pixar style)
-      // Menambahkan 'high-detail' dan 'vibrant' untuk kualitas maksimal
+      // Gunakan prompt yang sangat spesifik dan aman untuk anak-anak
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A professional 3D chibi style illustration of ${prompt}, high-quality 3D render, cute animated character style, vibrant colors, clean white background, soft lighting, 4k resolution, kid-friendly, masterwork, no text.` }],
+          parts: [{ text: `A cute colorful cartoon illustration of ${prompt}, high quality, clean white background, simple shapes, 3D style for kids, no text, no words.` }],
         },
         config: {
           imageConfig: { aspectRatio: "1:1" }
@@ -68,14 +67,13 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
-      console.warn("Image generation failed for prompt:", prompt, e);
-      // Fallback: Coba sekali lagi dengan prompt yang lebih sederhana jika gagal
+      console.error("Image gen failed, trying fallback:", prompt, e);
       try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const retryResponse = await ai.models.generateContent({
           model: 'gemini-2.5-flash-image',
           contents: {
-            parts: [{ text: `Cute simple cartoon of ${prompt}, white background, bright colors.` }],
+            parts: [{ text: `Simple drawing of ${prompt} for children.` }],
           }
         });
         const retryPart = retryResponse.candidates?.[0]?.content?.parts.find(p => p.inlineData);
@@ -91,7 +89,7 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan sangat jelas, pelan, dan ceria: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan ceria: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -111,9 +109,9 @@ Include: question, arabicWord, options, correctAnswer, imagePrompt.`,
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Apa pelajaran dari Surah ${surahName} untuk anak kecil? Gunakan bahasa yang sangat sederhana (maks 60 kata).`,
+        contents: `Apa pelajaran dari Surah ${surahName} untuk anak kecil? Gunakan bahasa yang sangat sederhana (maks 50 kata).`,
       });
-      return response.text || "Cerita indah akan segera hadir!";
+      return response.text || "Pelajaran indah dari Allah.";
     });
   }
 };
