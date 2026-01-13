@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { QuizQuestion } from "../types";
 
-// Fungsi untuk decode base64 string ke Uint8Array secara manual
+// Helper: Decode base64 ke Uint8Array
 function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -13,19 +13,12 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-// Fungsi untuk decode data PCM 16-bit ke AudioBuffer (24kHz Mono)
-async function decodePCMToAudioBuffer(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number = 24000
-): Promise<AudioBuffer> {
+// Helper: Decode Raw PCM 16-bit ke AudioBuffer
+async function decodePCM(data: Uint8Array, ctx: AudioContext, sampleRate: number = 24000): Promise<AudioBuffer> {
   const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length;
-  const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+  const buffer = ctx.createBuffer(1, dataInt16.length, sampleRate);
   const channelData = buffer.getChannelData(0);
-
-  for (let i = 0; i < frameCount; i++) {
-    // Normalisasi int16 (-32768 s/d 32767) ke float (-1.0 s/d 1.0)
+  for (let i = 0; i < dataInt16.length; i++) {
     channelData[i] = dataInt16[i] / 32768.0;
   }
   return buffer;
@@ -36,9 +29,9 @@ export const geminiService = {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Buat 5 soal kuis pilihan ganda untuk anak-anak tentang kosakata bahasa Arab kategori: "${category}". 
-Format respons harus JSON array.
-Contoh: { "question": "Apa bahasa Arabnya Gajah?", "arabicWord": "فِيْلٌ", "options": ["Fiilun", "Asadun", "Qittun", "Jamalun"], "correctAnswer": "Fiilun", "imagePrompt": "cute elephant cartoon" }`,
+      contents: `Buat 5 soal kuis pilihan ganda bahasa Arab kategori: "${category}". 
+Gunakan bahasa Indonesia untuk pertanyaan.
+Format: JSON array of objects { question, arabicWord, options, correctAnswer, imagePrompt }.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -66,59 +59,48 @@ Contoh: { "question": "Apa bahasa Arabnya Gajah?", "arabicWord": "فِيْلٌ",
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A very simple, cute, flat 2D vector cartoon illustration of ${prompt} for kids, bright friendly colors, white background, high quality.` }],
+          parts: [{ text: `A simple, super cute cartoon 3D illustration of ${prompt} for children, white background, bright colors, very clear shapes.` }],
         },
-        config: {
-          imageConfig: { aspectRatio: "1:1" }
-        }
+        config: { imageConfig: { aspectRatio: "1:1" } }
       });
-      
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
-      console.error("Gagal membuat gambar:", e);
       return undefined;
     }
   },
 
-  async playSpeech(text: string, audioCtx: AudioContext) {
+  async playSpeech(text: string, ctx: AudioContext) {
     try {
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      
+      if (ctx.state === 'suspended') await ctx.resume();
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: text }] }],
+        contents: [{ parts: [{ text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' }, 
-            },
-          },
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
         },
       });
-      
-      const base64Data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Data) {
-        const pcmData = decodeBase64(base64Data);
-        const audioBuffer = await decodePCMToAudioBuffer(pcmData, audioCtx);
-        const source = audioCtx.createBufferSource();
+      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64) {
+        const audioBuffer = await decodePCM(decodeBase64(base64), ctx);
+        const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
-        source.connect(audioCtx.destination);
+        source.connect(ctx.destination);
         source.start();
       }
     } catch (e) {
-      console.error("Gagal memutar audio:", e);
+      console.error("Audio error", e);
     }
   },
 
-  async getSurahTafsirForKids(surahName: string): Promise<string> {
+  async getSurahTafsir(surah: string): Promise<string> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Tuliskan pesan moral/pelajaran singkat dari Surah ${surahName} untuk anak-anak dalam 2 kalimat saja. Gunakan bahasa yang ceria.`,
+      contents: `Pesan moral singkat Surah ${surah} untuk anak kecil (maks 30 kata).`,
     });
-    return response.text || "Semoga kita selalu disayang Allah.";
+    return response.text || "Surat yang sangat indah.";
   }
 };
