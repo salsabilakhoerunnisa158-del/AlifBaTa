@@ -7,7 +7,6 @@ import {
   BookOpen, 
   Gamepad2, 
   ArrowLeft, 
-  CheckCircle2, 
   ChevronRight,
   Sparkles,
   Loader2,
@@ -20,7 +19,8 @@ import {
   Sun,
   Volume2,
   Trophy,
-  Dog
+  Dog,
+  RefreshCcw
 } from 'lucide-react';
 
 const BackgroundDecor: React.FC = () => (
@@ -54,8 +54,6 @@ const App: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
   const clickSfx = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"));
-  const correctSfx = useRef(new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_78330a6e38.mp3"));
-  const wrongSfx = useRef(new Audio("https://cdn.pixabay.com/audio/2022/03/10/audio_c356133068.mp3"));
 
   useEffect(() => {
     const saved = localStorage.getItem('alifbata_hifz');
@@ -69,9 +67,6 @@ const App: React.FC = () => {
   const getAudioContext = () => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume();
     }
     return audioContextRef.current;
   };
@@ -115,16 +110,16 @@ const App: React.FC = () => {
     if (!q) return;
     setItemLoading(true);
     try {
-      const imgVal = await geminiService.generateImage(q.imagePrompt);
+      const imgData = await geminiService.generateImage(q.imagePrompt);
       const updatedQuiz = [...questions];
-      updatedQuiz[index] = { ...q, generatedImage: imgVal ? `data:image/png;base64,${imgVal}` : undefined };
+      updatedQuiz[index] = { ...q, generatedImage: imgData ? `data:image/png;base64,${imgData}` : undefined };
       setCurrentQuiz(updatedQuiz);
       
-      // Auto play suara saat media dimuat
+      // Auto play suara
       const ctx = getAudioContext();
       geminiService.playSpeech(q.arabicWord, ctx);
     } catch (err) {
-      console.error("Media load failed", err);
+      console.error("Gagal memuat media kuis", err);
     } finally {
       setItemLoading(false);
     }
@@ -136,22 +131,15 @@ const App: React.FC = () => {
     setSelectedOption(answer);
     const isCorrect = answer === currentQuiz[quizIndex].correctAnswer;
     
-    if (isCorrect) {
-      setScore(s => s + 10);
-      correctSfx.current.currentTime = 0;
-      correctSfx.current.play().catch(() => {});
-    } else {
-      wrongSfx.current.currentTime = 0;
-      wrongSfx.current.play().catch(() => {});
-    }
+    if (isCorrect) setScore(s => s + 10);
 
     setTimeout(() => {
       if (quizIndex < currentQuiz.length - 1) {
-        const nextIndex = quizIndex + 1;
-        setQuizIndex(nextIndex);
+        const nextIdx = quizIndex + 1;
+        setQuizIndex(nextIdx);
         setSelectedOption(null);
         setAnswering(false);
-        loadQuizMedia(nextIndex, currentQuiz);
+        loadQuizMedia(nextIdx, currentQuiz);
       } else {
         setView(AppView.ACHIEVEMENTS);
       }
@@ -171,7 +159,7 @@ const App: React.FC = () => {
       setTafsir(tafsirText);
       setVerses(versesRes.data.ayat);
     } catch (err) {
-      console.error("Surah detail failed", err);
+      console.error("Gagal memuat surat", err);
     } finally {
       setLoading(false);
     }
@@ -195,18 +183,20 @@ const App: React.FC = () => {
               {itemLoading ? (
                 <div className="flex flex-col items-center gap-4">
                    <Loader2 className="animate-spin text-sky-400" size={64}/>
-                   <p className="font-kids text-sky-300 text-center">Mencari Gambar Lucu...</p>
+                   <p className="font-kids text-sky-300 text-center animate-pulse">Menyiapkan Gambar...</p>
                 </div>
               ) : q.generatedImage ? (
                 <img src={q.generatedImage} className="w-full h-full object-cover animate-in zoom-in duration-500" alt="Quiz" />
               ) : (
-                <div className="text-sky-200 flex flex-col items-center"><ImageIcon size={100} /><p className="font-kids mt-2">Gambar tidak muncul</p></div>
+                <div className="text-sky-200 flex flex-col items-center gap-4">
+                  <ImageIcon size={100} />
+                  <button onClick={() => loadQuizMedia(quizIndex, currentQuiz)} className="flex items-center gap-2 text-sky-500 font-kids">
+                    <RefreshCcw size={16}/> Coba Muat Gambar
+                  </button>
+                </div>
               )}
             </div>
-            <button onClick={() => {
-              const ctx = getAudioContext();
-              geminiService.playSpeech(q.arabicWord, ctx);
-            }} className="btn-chunky bg-sky-500 text-white px-8 py-4 rounded-3xl flex items-center gap-3 mb-6 shadow-lg shadow-sky-200">
+            <button onClick={() => geminiService.playSpeech(q.arabicWord, getAudioContext())} className="btn-chunky bg-sky-500 text-white px-8 py-4 rounded-3xl flex items-center gap-3 mb-6 shadow-lg active:scale-95">
               <Volume2 size={32} />
               <span className="font-arabic text-4xl">{q.arabicWord}</span>
             </button>
@@ -219,8 +209,8 @@ const App: React.FC = () => {
                 disabled={answering}
                 onClick={() => handleAnswer(opt)}
                 className={`btn-chunky p-6 rounded-[2rem] font-kids text-xl shadow-xl border-b-[8px] transition-all
-                  ${answering && opt === q.correctAnswer ? 'bg-emerald-500 text-white border-emerald-700 scale-95' : 
-                    answering && opt === selectedOption && opt !== q.correctAnswer ? 'bg-rose-500 text-white border-rose-700 scale-95' : 
+                  ${answering && opt === q.correctAnswer ? 'bg-emerald-500 text-white border-emerald-700' : 
+                    answering && opt === selectedOption && opt !== q.correctAnswer ? 'bg-rose-500 text-white border-rose-700' : 
                     'bg-white text-gray-700 border-gray-100'}
                 `}
               >
@@ -237,8 +227,7 @@ const App: React.FC = () => {
         <div className="space-y-10 animate-in zoom-in duration-500 text-center py-10">
           <div className="bg-white rounded-[4rem] p-12 shadow-2xl relative border-b-[16px] border-amber-50">
              <Trophy size={120} className="mx-auto text-amber-400 mb-6 drop-shadow-xl animate-bounce" />
-             <h2 className="text-5xl font-kids text-emerald-600 mb-2">Maa Syaa Allah!</h2>
-             <p className="text-xl font-kids text-sky-600">Kamu Hebat Sekali!</p>
+             <h2 className="text-5xl font-kids text-emerald-600 mb-2">Hebat!</h2>
              <div className="bg-emerald-50 p-8 rounded-[3rem] my-8">
                 <span className="text-gray-400 font-bold block uppercase tracking-widest mb-2">Skor Kamu</span>
                 <div className="flex items-center justify-center gap-3">
@@ -247,7 +236,7 @@ const App: React.FC = () => {
                 </div>
              </div>
              <button onClick={() => setView(AppView.LANDING)} className="w-full btn-chunky bg-emerald-500 text-white py-6 rounded-3xl font-kids text-2xl shadow-[0_10px_0_#059669]">
-                KEMBALI KE BERANDA
+                BERANDA
              </button>
           </div>
         </div>
@@ -298,7 +287,7 @@ const App: React.FC = () => {
              <h2 className="text-3xl font-kids mb-1">
                {view === AppView.QUIZ_MENU ? 'Tema Kuis' : view === AppView.JUZ_30 ? 'Pilih Surat' : 'Doa Harian'}
              </h2>
-             <p className="opacity-90">Kumpulkan Bintang dan Jadilah Pemenang! ⭐</p>
+             <p className="opacity-90">Mari Belajar Sambil Bermain! ⭐</p>
           </div>
           <div className="grid grid-cols-1 gap-4">
              {view === AppView.QUIZ_MENU ? (
@@ -373,10 +362,7 @@ const App: React.FC = () => {
               <h2 className="text-3xl font-kids text-pink-800 mb-8">{selectedPrayer.title}</h2>
               <div className="font-arabic text-5xl text-emerald-700 leading-relaxed mb-8" dir="rtl">{selectedPrayer.arabic}</div>
               <div className="p-6 bg-pink-50 rounded-[2rem] text-pink-900 italic text-lg leading-relaxed mb-8">{selectedPrayer.translation}</div>
-              <button onClick={() => {
-                const ctx = getAudioContext();
-                geminiService.playSpeech(selectedPrayer.arabic, ctx);
-              }} className="btn-chunky bg-pink-500 text-white p-6 rounded-3xl mx-auto flex items-center gap-3">
+              <button onClick={() => geminiService.playSpeech(selectedPrayer.arabic, getAudioContext())} className="btn-chunky bg-pink-500 text-white p-6 rounded-3xl mx-auto flex items-center gap-3">
                  <Volume2 size={32} /> DENGARKAN DOA
               </button>
            </div>
