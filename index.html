@@ -24,62 +24,80 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: #10b981;
+            --secondary: #3b82f6;
+            --accent: #f59e0b;
+            --bg-light: #F0FDF4;
+        }
+
         body {
             font-family: 'Quicksand', sans-serif;
-            background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 50%, #F5F3FF 100%);
+            background: fixed linear-gradient(180deg, #BAE6FD 0%, #F0FDF4 100%);
             margin: 0;
             padding: 0;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
             min-height: 100vh;
         }
+
         .font-kids { font-family: 'Fredoka One', cursive; }
         .font-arabic { font-family: 'Amiri', serif; }
         
-        .floating {
-            animation: floating 3s ease-in-out infinite;
-        }
+        /* Floating Animations */
         @keyframes floating {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0px); }
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .floating { animation: floating 4s ease-in-out infinite; }
+
+        @keyframes cloud-drift {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(100vw); }
+        }
+        .cloud-drift {
+            position: fixed;
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: 0;
+            animation: cloud-drift 30s linear infinite;
         }
 
-        .star-blink {
-            animation: blink 2s ease-in-out infinite;
-        }
+        /* Star Blink */
         @keyframes blink {
-            0%, 100% { opacity: 0.3; transform: scale(0.8); }
-            50% { opacity: 1; transform: scale(1.2); }
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+        .star-blink { animation: blink 3s ease-in-out infinite; }
+
+        /* Chunky Buttons */
+        .btn-chunky {
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            top: 0;
+        }
+        .btn-chunky:active {
+            top: 6px;
+            filter: brightness(0.9);
         }
 
-        .animate-shake {
-            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-        }
-        @keyframes shake {
-            10%, 90% { transform: translate3d(-1px, 0, 0); }
-            20%, 80% { transform: translate3d(2px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-            40%, 60% { transform: translate3d(4px, 0, 0); }
+        /* Glassmorphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
         .gradient-text {
-            background: linear-gradient(to right, #10b981, #3b82f6, #f59e0b);
+            background: linear-gradient(to right, #059669, #2563eb);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb { background: #10b981; border-radius: 10px; }
-        
-        .btn-chunky {
-            box-shadow: 0 8px 0 rgba(0,0,0,0.1);
-            transition: all 0.1s ease;
-        }
-        .btn-chunky:active {
-            transform: translateY(4px);
-            box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+        .card-shadow {
+            box-shadow: 0 10px 0 rgba(0, 0, 0, 0.05);
         }
     </style>
 <script type="importmap">
