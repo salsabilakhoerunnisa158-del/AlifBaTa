@@ -41,8 +41,9 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Generate 5 multiple choice questions for kids about Arabic vocabulary for "${category}". 
-        Return strictly JSON array: [{ question, arabicWord, options, correctAnswer, imagePrompt }]`,
+        contents: `Generate 10 multiple choice questions for kids about Arabic vocabulary for theme: "${category}". 
+        The questions should be in Indonesian. The options should be in Arabic transliteration.
+        Return strictly JSON array: [{ "question": string, "arabicWord": string, "options": string[], "correctAnswer": string, "imagePrompt": string }]`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -74,13 +75,14 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A simple, super cute 3D cartoon style illustration of ${prompt}, isolated on white background, bright happy colors, high resolution.` }],
+          parts: [{ text: `A simple, super cute 3D cartoon style illustration of ${prompt} for children's learning, isolated on a clean white background, vibrant and happy colors, professional high-quality educational material style.` }],
         },
         config: { imageConfig: { aspectRatio: "1:1" } }
       });
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
+      console.error("Image generation error:", e);
       return undefined;
     }
   },
@@ -91,7 +93,7 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
+        contents: [{ parts: [{ text: `Ucapkan dengan jelas: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
@@ -103,7 +105,7 @@ export const geminiService = {
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
-        source.start();
+        source.start(0);
       }
     } catch (e) {
       console.error("Audio playback error:", e);
@@ -115,7 +117,7 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Apa pelajaran utama dari Surah ${surah} untuk anak-anak kecil? Jawab dalam 25 kata maksimal.`,
+        contents: `Apa pelajaran utama dari Surah ${surah} untuk anak-anak kecil? Jawab dalam Bahasa Indonesia, maksimal 25 kata.`,
       });
       return response.text || "Pesan kasih sayang Allah.";
     } catch {

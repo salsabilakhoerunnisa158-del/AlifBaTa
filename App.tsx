@@ -24,7 +24,10 @@ import {
   Bike,
   Shirt,
   Trees,
-  CarFront
+  CarFront,
+  Briefcase,
+  GraduationCap,
+  UtensilsCrossed
 } from 'lucide-react';
 
 const ArabicLogo: React.FC<{ size?: 'sm' | 'lg' }> = ({ size = 'sm' }) => (
@@ -104,7 +107,10 @@ const App: React.FC = () => {
       if (err.message === 'QUOTA_EXCEEDED') {
         setErrorMsg("Batas AI tercapai. Menggunakan kuis cadangan!");
       }
-      const fallback = STATIC_QUIZ_DATA[category] || STATIC_QUIZ_DATA['Hewan Lucu'];
+      const fallback = [...(STATIC_QUIZ_DATA[category] || STATIC_QUIZ_DATA['Hewan Lucu'])];
+      // Shuffle static data if using it
+      fallback.sort(() => Math.random() - 0.5);
+      
       setCurrentQuiz(fallback);
       setQuizIndex(0);
       setScore(0);
@@ -118,17 +124,26 @@ const App: React.FC = () => {
   const loadQuizMedia = async (idx: number, questions: QuizQuestion[]) => {
     const q = questions[idx];
     if (!q) return;
+    
+    // Resume audio context on user interaction
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+
     setItemLoading(true);
     try {
+      // Generate image if not already generated
       if (!q.generatedImage) {
         const img = await geminiService.generateImage(q.imagePrompt);
-        const updated = [...questions];
-        updated[idx] = { ...q, generatedImage: img ? `data:image/png;base64,${img}` : undefined };
-        setCurrentQuiz(updated);
+        if (img) {
+          const updated = [...questions];
+          updated[idx] = { ...q, generatedImage: `data:image/png;base64,${img}` };
+          setCurrentQuiz(updated);
+        }
       }
-      geminiService.playSpeech(q.arabicWord, getAudioContext());
-    } catch {
-      console.warn("Media load failed");
+      // Play audio automatically when media loads
+      geminiService.playSpeech(q.arabicWord, ctx);
+    } catch (e) {
+      console.warn("Media load failed", e);
     } finally {
       setItemLoading(false);
     }
@@ -173,21 +188,32 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="bg-white rounded-[2rem] p-4 shadow-xl border-b-8 border-amber-50 flex flex-col items-center">
-            <div className="w-full aspect-square max-w-[180px] bg-sky-50 rounded-[1.5rem] overflow-hidden relative mb-3 flex items-center justify-center border-2 border-white shadow-inner">
+            <div className="w-full aspect-square max-w-[200px] bg-sky-50 rounded-[1.5rem] overflow-hidden relative mb-3 flex items-center justify-center border-2 border-white shadow-inner">
               {itemLoading ? (
-                <div className="flex flex-col items-center"><Loader2 className="animate-spin text-sky-400" size={32} /><p className="font-kids text-[10px] text-sky-300 mt-1">Sabar ya...</p></div>
+                <div className="flex flex-col items-center">
+                  <Loader2 className="animate-spin text-sky-400" size={32} />
+                  <p className="font-kids text-[10px] text-sky-300 mt-1">Sabar ya...</p>
+                </div>
               ) : q.generatedImage ? (
                 <img src={q.generatedImage} className="w-full h-full object-cover" />
               ) : (
                 <div className="flex flex-col items-center text-sky-200">
                   <ImageIcon size={40} />
-                  <button onClick={() => loadQuizMedia(quizIndex, currentQuiz)} className="text-[10px] mt-1 text-sky-500 underline flex items-center gap-1"><RefreshCcw size={10}/> Coba lagi</button>
+                  <button 
+                    onClick={() => loadQuizMedia(quizIndex, currentQuiz)} 
+                    className="text-[10px] mt-1 text-sky-500 underline flex items-center gap-1 hover:text-sky-700 transition-colors"
+                  >
+                    <RefreshCcw size={10}/> Muat Ulang
+                  </button>
                 </div>
               )}
             </div>
-            <button onClick={() => geminiService.playSpeech(q.arabicWord, getAudioContext())} className="bg-sky-500 text-white px-4 py-2 rounded-xl flex items-center gap-2 mb-3 shadow-md active:scale-95 transition-transform">
+            <button 
+              onClick={() => geminiService.playSpeech(q.arabicWord, getAudioContext())} 
+              className="bg-sky-500 text-white px-4 py-2 rounded-xl flex items-center gap-2 mb-3 shadow-md active:scale-95 transition-transform"
+            >
               <Volume2 size={20} />
-              <span className="font-arabic text-2xl">{q.arabicWord}</span>
+              <span className="font-arabic text-2xl" dir="rtl">{q.arabicWord}</span>
             </button>
             <h2 className="text-sm font-kids text-gray-800 text-center px-2">{q.question}</h2>
           </div>
@@ -200,7 +226,7 @@ const App: React.FC = () => {
                 className={`p-3 rounded-xl font-kids text-[13px] shadow-sm border-b-4 transition-all active:translate-y-1
                   ${answering && opt === q.correctAnswer ? 'bg-emerald-500 text-white border-emerald-700' : 
                     answering && opt === selectedOption && opt !== q.correctAnswer ? 'bg-rose-500 text-white border-rose-700' : 
-                    'bg-white text-gray-700 border-gray-100'}
+                    'bg-white text-gray-700 border-gray-100 hover:bg-sky-50'}
                 `}
               >
                 {opt}
@@ -251,6 +277,9 @@ const App: React.FC = () => {
         { name: 'Pakaian', icon: <Shirt size={16}/> },
         { name: 'Hobi & Olahraga', icon: <Bike size={16}/> },
         { name: 'Alam & Cuaca', icon: <Trees size={16}/> },
+        { name: 'Profesi', icon: <Briefcase size={16}/> },
+        { name: 'Sekolah', icon: <GraduationCap size={16}/> },
+        { name: 'Makanan & Minuman', icon: <UtensilsCrossed size={16}/> },
         { name: 'Angka Arab', icon: <Star size={16}/> }
       ];
 
@@ -263,7 +292,7 @@ const App: React.FC = () => {
           <div className="grid gap-2">
              {view === AppView.QUIZ_MENU ? (
                themes.map((t) => (
-                 <button key={t.name} onClick={() => startQuiz(t.name)} className="bg-white rounded-xl p-3 shadow-sm border-b-2 border-gray-100 flex items-center justify-between active:translate-y-0.5 group">
+                 <button key={t.name} onClick={() => startQuiz(t.name)} className="bg-white rounded-xl p-3 shadow-sm border-b-2 border-gray-100 flex items-center justify-between active:translate-y-0.5 group hover:bg-amber-50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="bg-amber-50 text-amber-500 p-2 rounded-lg group-hover:scale-110 transition-transform">
                         {t.icon}
@@ -274,14 +303,14 @@ const App: React.FC = () => {
                  </button>
                ))
              ) : (view === AppView.JUZ_30 ? JUZ_30_SURAHS : DAILY_PRAYERS).map((item: any) => (
-              <button key={item.number || item.id} onClick={() => view === AppView.JUZ_30 ? setSelectedSurah(item) : setSelectedPrayer(item)} className="bg-white rounded-xl p-3 shadow-sm border-b-2 border-gray-100 flex items-center justify-between active:translate-y-0.5">
+              <button key={item.number || item.id} onClick={() => view === AppView.JUZ_30 ? setSelectedSurah(item) : setSelectedPrayer(item)} className="bg-white rounded-xl p-3 shadow-sm border-b-2 border-gray-100 flex items-center justify-between active:translate-y-0.5 hover:bg-sky-50 transition-colors">
                  <div className="flex items-center gap-2">
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-kids text-[10px] text-white ${hifzProgress.includes(item.number) ? 'bg-emerald-500' : 'bg-gray-200 text-gray-400'}`}>
                       {view === AppView.JUZ_30 ? (hifzProgress.includes(item.number) ? <Heart fill="currentColor" size={12}/> : item.number) : <Sparkles size={14}/>}
                     </div>
                     <span className="text-xs font-kids text-gray-700">{item.transliteration || item.title}</span>
                  </div>
-                 {view === AppView.JUZ_30 && <span className="font-arabic text-lg text-sky-600">{item.name}</span>}
+                 {view === AppView.JUZ_30 && <span className="font-arabic text-lg text-sky-600" dir="rtl">{item.name}</span>}
               </button>
              ))}
           </div>
@@ -314,7 +343,7 @@ const App: React.FC = () => {
       return (
         <div className="space-y-3 pb-24 animate-in slide-in-from-bottom">
            <div className="bg-white rounded-[1.5rem] p-4 text-center shadow-md">
-              <div className="font-arabic text-5xl text-sky-600 mb-1 leading-tight">{selectedSurah.name}</div>
+              <div className="font-arabic text-5xl text-sky-600 mb-1 leading-tight" dir="rtl">{selectedSurah.name}</div>
               <h2 className="text-xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
               <p className="text-[10px] text-gray-400 italic">"{selectedSurah.translation}"</p>
            </div>
@@ -342,7 +371,10 @@ const App: React.FC = () => {
               <h2 className="text-md font-kids text-pink-800 mb-4">{selectedPrayer.title}</h2>
               <div className="font-arabic text-3xl text-emerald-700 leading-relaxed mb-4" dir="rtl">{selectedPrayer.arabic}</div>
               <div className="p-3 bg-pink-50 rounded-xl text-pink-900 italic text-[11px] mb-4 leading-relaxed">{selectedPrayer.translation}</div>
-              <button onClick={() => geminiService.playSpeech(selectedPrayer.arabic, getAudioContext())} className="bg-pink-500 text-white p-3 rounded-xl mx-auto flex items-center gap-2 shadow-sm active:scale-95 text-xs">
+              <button 
+                onClick={() => geminiService.playSpeech(selectedPrayer.arabic, getAudioContext())} 
+                className="bg-pink-500 text-white p-3 rounded-xl mx-auto flex items-center gap-2 shadow-sm active:scale-95 text-xs transition-transform"
+              >
                  <Volume2 size={16} /> DENGARKAN
               </button>
            </div>
