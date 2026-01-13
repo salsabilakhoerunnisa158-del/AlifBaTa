@@ -32,17 +32,15 @@ import {
   Dog
 } from 'lucide-react';
 
-// --- Decorative Background Elements ---
+// --- Dekorasi Latar Belakang Bergerak ---
 const BackgroundDecor: React.FC = () => (
   <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
     <div className="cloud-drift top-[10%]" style={{ animationDuration: '40s' }}><Cloud size={100} color="white" fill="white" /></div>
-    <div className="cloud-drift top-[30%] left-[-20%]" style={{ animationDuration: '55s' }}><Cloud size={120} color="white" fill="white" /></div>
-    <div className="cloud-drift top-[60%] left-[-50%]" style={{ animationDuration: '45s' }}><Cloud size={150} color="white" fill="white" /></div>
+    <div className="cloud-drift top-[40%] left-[-20%]" style={{ animationDuration: '55s' }}><Cloud size={120} color="white" fill="white" /></div>
     
     <div className="absolute top-[5%] left-[10%] star-blink text-yellow-300"><Star fill="currentColor" size={24} /></div>
     <div className="absolute top-[20%] right-[15%] star-blink text-blue-200" style={{ animationDelay: '1s' }}><Star fill="currentColor" size={20} /></div>
     <div className="absolute bottom-[20%] left-[20%] star-blink text-pink-300" style={{ animationDelay: '2s' }}><Star fill="currentColor" size={30} /></div>
-    <div className="absolute top-[40%] left-[40%] star-blink text-emerald-300" style={{ animationDelay: '0.5s' }}><Star fill="currentColor" size={16} /></div>
   </div>
 );
 
@@ -164,7 +162,7 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const [tafsirText, versesRes] = await Promise.all([
-        geminiService.getSurahTafsirForKids(surah.transliteration),
+        geminiService.getSurahTafsirForKids(surah.transliteration).catch(() => "Pelajaran indah dari surat ini."),
         fetch(`https://equran.id/api/v2/surat/${surah.number}`).then(res => res.json())
       ]);
       setTafsir(tafsirText);
@@ -172,12 +170,21 @@ const App: React.FC = () => {
     } catch (err) { setErrorNotice("Gagal memuat surat."); } finally { setLoading(false); }
   };
 
+  const toggleHifz = (num: number) => {
+    playClick();
+    const newProgress = hifzProgress.includes(num) 
+      ? hifzProgress.filter(n => n !== num) 
+      : [...hifzProgress, num];
+    setHifzProgress(newProgress);
+    localStorage.setItem('alifbata_hifz', JSON.stringify(newProgress));
+  };
+
   if (!hasStarted) {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center p-8 text-center z-[100] overflow-hidden">
         <BackgroundDecor />
         <div className="relative z-10 animate-in zoom-in duration-700">
-          <div className="relative mb-10">
+          <div className="relative mb-10 flex justify-center">
             <div className="absolute inset-0 bg-white/40 blur-3xl rounded-full transform scale-150 animate-pulse"></div>
             <div className="w-64 h-64 md:w-80 md:h-80 rounded-[4rem] glass border-4 border-white shadow-2xl overflow-hidden floating flex items-center justify-center p-2">
               <img 
@@ -188,18 +195,9 @@ const App: React.FC = () => {
               />
             </div>
           </div>
-          
-          <h1 className="text-7xl md:text-8xl font-kids mb-2 drop-shadow-[0_8px_0_rgba(0,0,0,0.1)] text-emerald-600">AlifBaTa</h1>
-          <h2 className="text-3xl font-kids text-sky-600 mb-8 tracking-wide">Kids Edition</h2>
-          
-          <p className="text-xl mb-12 max-w-sm mx-auto font-medium text-emerald-800 leading-relaxed opacity-80">
-            Mari berpetualang belajar Bahasa Arab & Juz 30 dengan seru!
-          </p>
-          
-          <button 
-            onClick={handleStartApp} 
-            className="btn-chunky bg-amber-400 hover:bg-amber-300 text-amber-950 px-14 py-8 rounded-[2.5rem] font-kids text-3xl shadow-[0_12px_0_#d97706] flex items-center justify-center gap-4 active:shadow-none active:translate-y-2 transition-all"
-          >
+          <h1 className="text-7xl font-kids mb-2 drop-shadow-xl text-emerald-600">AlifBaTa</h1>
+          <h2 className="text-3xl font-kids text-sky-600 mb-8">Kids Edition</h2>
+          <button onClick={handleStartApp} className="btn-chunky bg-amber-400 text-amber-950 px-14 py-8 rounded-[2.5rem] font-kids text-3xl shadow-[0_12px_0_#d97706] flex items-center gap-4 active:shadow-none active:translate-y-2 transition-all">
             <PlayCircle size={48} /> AYO MULAI!
           </button>
         </div>
@@ -211,48 +209,46 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-20 max-w-lg mx-auto px-4 pt-8 relative z-10 font-sans">
       <BackgroundDecor />
       
-      {/* Dynamic Navbar */}
+      {/* Navbar Atas */}
       <div className="flex items-center justify-between mb-10 sticky top-4 z-50 glass p-5 rounded-[2.5rem] shadow-2xl border-2 border-white">
-        <div className="flex items-center gap-4 cursor-pointer" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); }}>
-          <div className="w-12 h-12 bg-white rounded-2xl p-1 shadow-inner border border-emerald-50">
+        <div className="flex items-center gap-4 cursor-pointer" onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); setSelectedPrayer(null); }}>
+          <div className="w-12 h-12 bg-white rounded-2xl p-1 shadow-inner border border-emerald-50 overflow-hidden">
             <img src="icon.png" className="w-full h-full object-cover rounded-xl" onError={(e) => { (e.target as any).src = "https://cdn-icons-png.flaticon.com/512/3241/3241470.png"; }} />
           </div>
           <h1 className="text-2xl font-kids gradient-text">AlifBaTa</h1>
         </div>
         <div className="flex gap-2">
-           <button onClick={() => { playClick(); setIsMuted(!isMuted); if(!isMuted) bgMusicRef.current?.pause(); else bgMusicRef.current?.play(); }} className={`p-4 rounded-2xl shadow-lg transition-all ${isMuted ? 'bg-gray-200 text-gray-500' : 'bg-amber-100 text-amber-600'}`}>
-            {isMuted ? <Music size={24} className="opacity-50" /> : <Music size={24} />}
+          <button onClick={() => { playClick(); setIsMuted(!isMuted); if(!isMuted) bgMusicRef.current?.play(); else bgMusicRef.current?.pause(); }} className={`p-4 rounded-2xl shadow-lg transition-all ${isMuted ? 'bg-gray-200 text-gray-500' : 'bg-amber-100 text-amber-600'}`}>
+            <Music size={24} />
           </button>
           {view !== AppView.LANDING && (
-            <button onClick={() => { playClick(); setView(AppView.LANDING); setSelectedSurah(null); }} className="p-4 bg-emerald-500 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
+            <button onClick={() => { playClick(); if(selectedSurah) setSelectedSurah(null); else if(selectedPrayer) setSelectedPrayer(null); else setView(AppView.LANDING); }} className="p-4 bg-emerald-500 text-white rounded-2xl shadow-lg active:scale-95 transition-all">
               <ArrowLeft size={24} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Halaman Beranda */}
       {view === AppView.LANDING && (
         <div className="space-y-8 animate-in slide-in-from-bottom duration-500">
-          {/* Greeting Hero */}
           <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border-b-[12px] border-emerald-800/20 group">
             <div className="relative z-10">
               <h2 className="text-4xl font-kids mb-2">Assalamu'alaikum!</h2>
               <p className="text-emerald-100 text-xl font-medium opacity-90">Hari ini mau belajar apa?</p>
             </div>
-            <Sparkles className="absolute -right-4 -top-4 text-white/10 w-40 h-40 group-hover:rotate-12 transition-transform" />
+            <Sparkles className="absolute -right-4 -top-4 text-white/10 w-40 h-40" />
           </div>
 
-          {/* Feature Grid */}
           <div className="grid grid-cols-2 gap-6">
-            <div onClick={() => { playClick(); setView(AppView.QUIZ_MENU); }} className="btn-chunky bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-amber-100 flex flex-col items-center cursor-pointer group active:scale-95">
+            <div onClick={() => { playClick(); setView(AppView.QUIZ_MENU); }} className="btn-chunky bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-amber-100 flex flex-col items-center cursor-pointer group">
               <div className="bg-amber-400 p-6 rounded-[2rem] mb-4 text-white shadow-lg group-hover:scale-110 transition-transform">
                 <Gamepad2 size={48} />
               </div>
               <h3 className="font-kids text-2xl text-amber-800">Kuis Seru</h3>
             </div>
             
-            <div onClick={() => { playClick(); setView(AppView.JUZ_30); }} className="btn-chunky bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-sky-100 flex flex-col items-center cursor-pointer group active:scale-95">
+            <div onClick={() => { playClick(); setView(AppView.JUZ_30); }} className="btn-chunky bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-sky-100 flex flex-col items-center cursor-pointer group">
               <div className="bg-sky-500 p-6 rounded-[2rem] mb-4 text-white shadow-lg group-hover:scale-110 transition-transform">
                 <BookOpen size={48} />
               </div>
@@ -260,50 +256,42 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Wide Feature */}
-          <div onClick={() => { playClick(); setView(AppView.DAILY_PRAYERS); }} className="btn-chunky bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-pink-100 flex items-center justify-between cursor-pointer group active:scale-95">
+          <div onClick={() => { playClick(); setView(AppView.DAILY_PRAYERS); }} className="btn-chunky bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[10px] border-pink-100 flex items-center justify-between cursor-pointer group">
              <div className="flex items-center gap-6">
                 <div className="bg-pink-500 p-6 rounded-[2rem] text-white shadow-lg group-hover:rotate-6 transition-transform">
                   <Heart size={40} fill="currentColor" />
                 </div>
                 <div>
                    <h3 className="font-kids text-3xl text-pink-800">Doa Harian</h3>
-                   <p className="text-pink-400 font-bold uppercase tracking-widest text-xs mt-1">Hafalan Doa Pilihan</p>
+                   <p className="text-pink-400 font-bold uppercase tracking-widest text-xs mt-1">Hafalan Doa Anak Sholeh</p>
                 </div>
              </div>
              <ChevronRight size={32} className="text-pink-200" />
           </div>
 
-          {/* Stats Pod */}
           <div className="glass p-8 rounded-[3rem] border-2 border-white shadow-2xl flex justify-around items-center">
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-2 text-emerald-600 shadow-inner group-hover:scale-110 transition-transform">
-                <Star fill="currentColor" size={32}/>
-              </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-2 text-emerald-600"><Star fill="currentColor" size={32}/></div>
               <span className="block text-2xl font-kids text-emerald-800">{score} Bintang</span>
             </div>
-            <div className="h-16 w-px bg-emerald-200 opacity-50"></div>
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-2 text-blue-600 shadow-inner group-hover:scale-110 transition-transform">
-                <CheckCircle2 size={32}/>
-              </div>
+            <div className="h-16 w-px bg-emerald-200"></div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-2 text-blue-600"><CheckCircle2 size={32}/></div>
               <span className="block text-2xl font-kids text-blue-800">{hifzProgress.length} Hafal</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Placeholder views for menu navigation */}
+      {/* Menu Kuis, Juz 30, atau Doa */}
       {(view === AppView.QUIZ_MENU || view === AppView.JUZ_30 || view === AppView.DAILY_PRAYERS) && !selectedSurah && !selectedPrayer && (
         <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-10">
           <div className={`rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden ${view === AppView.QUIZ_MENU ? 'bg-amber-500' : view === AppView.JUZ_30 ? 'bg-sky-500' : 'bg-pink-500'}`}>
              <h2 className="text-3xl font-kids mb-1">
-               {view === AppView.QUIZ_MENU ? 'Tema Kuis' : view === AppView.JUZ_30 ? 'Pilih Surat' : 'Doa Anak Sholeh'}
+               {view === AppView.QUIZ_MENU ? 'Pilih Tema Kuis' : view === AppView.JUZ_30 ? 'Pilih Surat' : 'Doa Harian'}
              </h2>
-             <p className="opacity-80 font-medium">Ayo kumpulkan bintang!</p>
-             <div className="absolute -right-8 -bottom-8 opacity-20"><Sparkles size={150} /></div>
+             <p className="opacity-90">Kumpulkan bintang untuk jadi pemenang! ⭐</p>
           </div>
-          
           <div className="grid grid-cols-1 gap-4">
              {view === AppView.QUIZ_MENU ? (
                ['Hewan Lucu', 'Buah Segar', 'Benda di Rumah', 'Anggota Keluarga', 'Warna-warni', 'Angka Arab'].map((cat) => (
@@ -318,7 +306,7 @@ const App: React.FC = () => {
                  </button>
                ))
              ) : (view === AppView.JUZ_30 ? JUZ_30_SURAHS : DAILY_PRAYERS).map((item: any) => (
-              <button key={item.number || item.id} onClick={() => view === AppView.JUZ_30 ? openSurahDetail(item) : setView(AppView.DAILY_PRAYERS)} className="btn-chunky bg-white rounded-[2rem] p-6 shadow-xl border-b-[8px] border-gray-100 flex items-center justify-between group">
+              <button key={item.number || item.id} onClick={() => view === AppView.JUZ_30 ? openSurahDetail(item) : setSelectedPrayer(item)} className="btn-chunky bg-white rounded-[2rem] p-6 shadow-xl border-b-[8px] border-gray-100 flex items-center justify-between group">
                  <div className="flex items-center gap-5">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-kids text-white ${hifzProgress.includes(item.number) ? 'bg-emerald-500' : 'bg-gray-100 text-gray-400'}`}>
                       {view === AppView.JUZ_30 ? (hifzProgress.includes(item.number) ? <Heart fill="currentColor" size={20}/> : item.number) : <Sparkles size={24}/>}
@@ -332,31 +320,48 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Surah Detail View */}
+      {/* Detail Surat Al-Qur'an */}
       {selectedSurah && (
         <div className="space-y-6 animate-in slide-in-from-bottom duration-500 pb-32">
-          <div className="bg-white rounded-[3rem] p-10 shadow-2xl text-center border-b-[12px] border-sky-50 relative overflow-hidden">
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl text-center border-b-[12px] border-sky-50">
             <div className="font-arabic text-8xl text-sky-600 mb-4">{selectedSurah.name}</div>
             <h2 className="text-4xl font-kids text-gray-800">{selectedSurah.transliteration}</h2>
             <p className="text-gray-400 italic">"{selectedSurah.translation}"</p>
           </div>
-          
           <div className="bg-amber-50 p-8 rounded-[2.5rem] border-2 border-white shadow-xl">
-             <h3 className="font-kids text-amber-800 mb-3 flex items-center gap-3"><Sun size={24}/> Pesan Indah</h3>
-             {loading ? <div className="flex justify-center p-4"><Loader2 className="animate-spin text-amber-400"/></div> : <p className="text-amber-900 leading-relaxed font-medium text-lg">{tafsir}</p>}
+             <h3 className="font-kids text-amber-800 mb-3 flex items-center gap-3"><Sun size={24}/> Cerita Singkat</h3>
+             {loading ? <Loader2 className="animate-spin text-amber-400 mx-auto"/> : <p className="text-amber-900 leading-relaxed font-medium text-lg">{tafsir}</p>}
           </div>
-
           <div className="space-y-6">
              {verses.map((v, i) => (
                <div key={i} className="bg-white rounded-[2.5rem] p-8 shadow-xl border-b-[8px] border-gray-50">
                  <div className="flex justify-between items-center mb-6">
-                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-kids text-emerald-600 shadow-inner text-xl">{v.nomorAyat}</div>
+                   <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-kids text-emerald-600">{v.nomorAyat}</div>
                  </div>
                  <div className="text-right font-arabic text-5xl leading-loose text-gray-800 mb-8" dir="rtl">{v.teksArab}</div>
                  <p className="text-emerald-900 text-xl font-medium leading-relaxed italic border-t border-emerald-50 pt-6">{v.teksIndonesia}</p>
                </div>
              ))}
           </div>
+          <div className="fixed bottom-8 left-0 right-0 px-8 z-40 max-w-lg mx-auto">
+             <button onClick={() => toggleHifz(selectedSurah.number)} className={`w-full py-6 rounded-full font-kids text-2xl shadow-2xl btn-chunky ${hifzProgress.includes(selectedSurah.number) ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-amber-950'}`}>
+                {hifzProgress.includes(selectedSurah.number) ? 'Hafal! ✅' : 'Tandai Hafal ❤️'}
+             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Doa Harian */}
+      {selectedPrayer && (
+        <div className="space-y-8 animate-in slide-in-from-bottom duration-500 pb-20">
+           <div className="bg-white rounded-[3rem] p-8 shadow-2xl border-b-[12px] border-pink-50 text-center">
+              <h2 className="text-3xl font-kids text-pink-800 mb-8">{selectedPrayer.title}</h2>
+              <div className="font-arabic text-5xl text-emerald-700 leading-relaxed mb-8" dir="rtl">{selectedPrayer.arabic}</div>
+              <div className="p-6 bg-pink-50 rounded-[2rem] text-pink-900 italic text-lg leading-relaxed mb-8">{selectedPrayer.translation}</div>
+              <button onClick={() => geminiService.generateSpeech(selectedPrayer.arabic).then(d => d && new Audio(`data:audio/wav;base64,${d}`).play())} className="btn-chunky bg-pink-500 text-white p-6 rounded-3xl mx-auto flex items-center gap-3">
+                 <Volume2 size={32} /> Dengarkan Doa
+              </button>
+           </div>
         </div>
       )}
     </div>
