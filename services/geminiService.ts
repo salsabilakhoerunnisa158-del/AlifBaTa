@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { QuizQuestion } from "../types";
 
-// Helper: Decode base64 ke Uint8Array (Metode manual sesuai regulasi)
+// Helper: Decode base64 ke Uint8Array
 function decodeBase64(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -13,14 +13,13 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-// Helper: Decode Raw PCM 16-bit ke AudioBuffer (Sesuai panduan teknis Gemini)
+// Helper: Decode Raw PCM 16-bit ke AudioBuffer
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
   sampleRate: number = 24000,
   numChannels: number = 1
 ): Promise<AudioBuffer> {
-  // Pastikan data buffer selaras dengan Int16 (2 bytes per sample)
   const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
@@ -28,7 +27,6 @@ async function decodeAudioData(
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      // Normalisasi PCM 16-bit ke Float32
       channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
@@ -41,9 +39,10 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Generate 10 multiple choice questions for kids about Arabic vocabulary for theme: "${category}". 
-        The questions should be in Indonesian. The options should be in Arabic transliteration.
-        Return strictly JSON array: [{ "question": string, "arabicWord": string, "options": string[], "correctAnswer": string, "imagePrompt": string }]`,
+        contents: `Buatlah 10 soal pilihan ganda tentang kosakata bahasa Arab untuk anak-anak dengan tema: "${category}". 
+        Pertanyaan dalam Bahasa Indonesia. Pilihan jawaban dalam transliterasi Latin. 
+        Sertakan kata Arab asli dan prompt gambar digital art yang ceria.
+        Format JSON: [{ "question": string, "arabicWord": string, "options": string[], "correctAnswer": string, "imagePrompt": string }]`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -64,7 +63,7 @@ export const geminiService = {
       });
       return JSON.parse(response.text || "[]");
     } catch (e: any) {
-      if (e.message?.includes('quota')) throw new Error('QUOTA_EXCEEDED');
+      if (e.status === 429 || e.message?.includes('quota')) throw new Error('QUOTA_EXCEEDED');
       throw e;
     }
   },
@@ -75,30 +74,52 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A simple, super cute 3D cartoon style illustration of ${prompt} for children's learning, isolated on a clean white background, vibrant and happy colors, professional high-quality educational material style.` }],
+          parts: [{ text: `Cute 3D Pixar style cartoon of ${prompt}, white background, bright colors, for kids.` }],
         },
         config: { imageConfig: { aspectRatio: "1:1" } }
       });
       const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       return part?.inlineData?.data;
     } catch (e) {
-      console.error("Image generation error:", e);
       return undefined;
     }
   },
 
+  /**
+   * Narator Suara (Native)
+   * Digunakan untuk feedback agar hemat kuota API
+   */
+  playNarrator(text: string) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'id-ID';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.3; // Suara ceria
+    window.speechSynthesis.speak(utterance);
+  },
+
+  /**
+   * Suara Bahasa Arab (Gemini TTS)
+   */
   async playSpeech(text: string, ctx: AudioContext) {
     try {
       if (ctx.state === 'suspended') await ctx.resume();
+      
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan dengan jelas: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan kata ini dalam bahasa Arab dengan sangat jelas, perlahan, dan ramah seperti guru taman kanak-kanak: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+          speechConfig: { 
+            voiceConfig: { 
+              prebuiltVoiceConfig: { voiceName: 'Kore' } 
+            } 
+          },
         },
       });
+      
       const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64) {
         const audioBuffer = await decodeAudioData(decodeBase64(base64), ctx);
@@ -107,21 +128,15 @@ export const geminiService = {
         source.connect(ctx.destination);
         source.start(0);
       }
-    } catch (e) {
-      console.error("Audio playback error:", e);
-    }
-  },
-
-  async getSurahTafsir(surah: string): Promise<string> {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Apa pelajaran utama dari Surah ${surah} untuk anak-anak kecil? Jawab dalam Bahasa Indonesia, maksimal 25 kata.`,
-      });
-      return response.text || "Pesan kasih sayang Allah.";
-    } catch {
-      return "Surat yang penuh berkah dari Allah.";
+    } catch (e: any) {
+      console.warn("TTS Gemini Gagal, menggunakan suara sistem:", e.message);
+      // Fallback ke Web Speech API jika API Gemini sibuk atau error
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ar-SA';
+        utterance.rate = 0.8;
+        window.speechSynthesis.speak(utterance);
+      }
     }
   }
 };
