@@ -35,17 +35,18 @@ import {
   Users,
   Palette,
   Hash,
-  ShoppingBag,
   CloudRain,
   Stethoscope,
   School,
-  Pizza
+  Pizza,
+  PauseCircle,
+  ImageOff
 } from 'lucide-react';
 
 const SUCCESS_PHRASES = ["Maa Syaa Allah! Hebat!", "Bagus sekali!", "Pintar!", "Luar biasa!", "Benar! Barakallah!", "Wah, kamu hebat!"];
 const FAILURE_PHRASES = ["Ayo coba lagi!", "Jangan menyerah ya!", "Hampir benar!", "Yuk coba lagi!", "Belum tepat, ayo fokus!"];
+const BASMALAH_TEXT = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ";
 
-// Pemetaan Ikon dan Warna untuk Tema Kuis
 const THEME_CONFIG: Record<string, { icon: React.ReactNode, color: string, bgColor: string }> = {
   'Hewan Lucu': { icon: <Heart size={20}/>, color: 'text-amber-500', bgColor: 'bg-amber-50' },
   'Buah Segar': { icon: <Apple size={20}/>, color: 'text-emerald-500', bgColor: 'bg-emerald-50' },
@@ -72,9 +73,44 @@ const ArabicLogo: React.FC<{ size?: 'sm' | 'lg' }> = ({ size = 'sm' }) => (
 
 const BackgroundDecor: React.FC = () => (
   <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-    <div className="cloud-drift top-[10%]" style={{ animationDuration: '40s' }}><Cloud size={60} color="white" fill="white" /></div>
-    <div className="cloud-drift top-[30%] left-[-10%]" style={{ animationDuration: '55s' }}><Cloud size={80} color="white" fill="white" /></div>
-    <div className="absolute top-[5%] right-[10%] star-blink text-yellow-300 opacity-30"><Star fill="currentColor" size={16} /></div>
+    {/* Awan Putih Cepat */}
+    <div className="cloud-drift top-[8%] opacity-60" style={{ animationDuration: '25s', animationDelay: '-5s' }}>
+      <Cloud size={70} className="text-white fill-current" />
+    </div>
+    
+    {/* Awan Biru Muda Lambat */}
+    <div className="cloud-drift top-[25%] opacity-40" style={{ animationDuration: '45s', animationDelay: '-15s' }}>
+      <Cloud size={100} className="text-sky-100 fill-current" />
+    </div>
+
+    {/* Awan Putih Besar Sedang */}
+    <div className="cloud-drift top-[45%] opacity-50" style={{ animationDuration: '35s', animationDelay: '-2s' }}>
+      <Cloud size={120} className="text-white fill-current" />
+    </div>
+
+    {/* Awan Hijau Muda (Alam) */}
+    <div className="cloud-drift top-[65%] opacity-30" style={{ animationDuration: '55s', animationDelay: '-25s' }}>
+      <Cloud size={80} className="text-emerald-50 fill-current" />
+    </div>
+
+    {/* Awan Kuning Lembut (Cahaya Matahari) */}
+    <div className="cloud-drift top-[85%] opacity-40" style={{ animationDuration: '40s', animationDelay: '-10s' }}>
+      <Cloud size={90} className="text-amber-50 fill-current" />
+    </div>
+
+    {/* Bintang-bintang Kedip yang Bertebaran */}
+    <div className="absolute top-[12%] right-[15%] star-blink text-yellow-300 opacity-40">
+      <Star fill="currentColor" size={20} />
+    </div>
+    <div className="absolute top-[40%] left-[10%] star-blink text-sky-300 opacity-30" style={{ animationDelay: '1s' }}>
+      <Star fill="currentColor" size={14} />
+    </div>
+    <div className="absolute top-[75%] right-[25%] star-blink text-pink-300 opacity-30" style={{ animationDelay: '2s' }}>
+      <Heart fill="currentColor" size={16} />
+    </div>
+    <div className="absolute top-[5%] left-[30%] opacity-20 floating">
+      <Sun size={40} className="text-yellow-400 fill-current" />
+    </div>
   </div>
 );
 
@@ -95,11 +131,17 @@ const App: React.FC = () => {
   const [itemLoading, setItemLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [surahAyahs, setSurahAyahs] = useState<Verse[]>([]);
+  const [playingAyahNumber, setPlayingAyahNumber] = useState<number | null>(null);
+  const [isWrong, setIsWrong] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
   const sfxCorrectRef = useRef<HTMLAudioElement | null>(null);
   const sfxWrongRef = useRef<HTMLAudioElement | null>(null);
+  const murottalRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('alifbata_hifz');
@@ -114,8 +156,77 @@ const App: React.FC = () => {
     
     return () => {
       bgMusicRef.current?.pause();
+      murottalRef.current?.pause();
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedSurah) {
+      fetchSurahDetails(selectedSurah.number);
+    } else {
+      setSurahAyahs([]);
+      murottalRef.current?.pause();
+      setPlayingAyahNumber(null);
+    }
+  }, [selectedSurah]);
+
+  const fetchSurahDetails = async (number: number) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`https://api.alquran.cloud/v1/surah/${number}/editions/ar.alafasy,id.indonesian`);
+      const data = await response.json();
+      if (data.status === 'OK') {
+        const arabicData = data.data[0];
+        const translationData = data.data[1];
+        
+        const mergedAyahs: Verse[] = arabicData.ayahs.map((ayah: any, index: number) => {
+          let text = ayah.text;
+          
+          if (number !== 1 && ayah.numberInSurah === 1) {
+            const basmalahMatch = text.match(/^بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\s*/);
+            if (basmalahMatch) {
+              text = text.substring(basmalahMatch[0].length).trim();
+            } else {
+              const broadPattern = /^بِسْمِ\s+.*?الرَّحِيمِ\s*/;
+              const broadMatch = text.match(broadPattern);
+              if (broadMatch) {
+                text = text.substring(broadMatch[0].length).trim();
+              }
+            }
+          }
+
+          return {
+            number: ayah.number,
+            audio: ayah.audio,
+            text: text,
+            translation: translationData.ayahs[index].text,
+            numberInSurah: ayah.numberInSurah
+          };
+        });
+        
+        setSurahAyahs(mergedAyahs);
+      }
+    } catch (err) {
+      console.error("Gagal mengambil data surah:", err);
+      setErrorMsg("Gagal memuat ayat Al-Quran. Periksa internet ya!");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const playAyahAudio = (audioUrl: string, ayahNumber: number) => {
+    if (murottalRef.current) {
+      murottalRef.current.pause();
+    }
+    
+    setPlayingAyahNumber(ayahNumber);
+    murottalRef.current = new Audio(audioUrl);
+    murottalRef.current.play().catch(e => console.error("Audio play error:", e));
+    
+    murottalRef.current.onended = () => {
+      setPlayingAyahNumber(null);
+    };
+  };
 
   const getAudioContext = () => {
     if (!audioContextRef.current) {
@@ -151,6 +262,7 @@ const App: React.FC = () => {
       setView(AppView.QUIZ_GAME);
       loadQuizMedia(0, q);
     } catch (err: any) {
+      console.warn("Quiz generation error:", err);
       if (err.message === 'QUOTA_EXCEEDED') {
         setErrorMsg("Batas AI tercapai. Menggunakan kuis cadangan!");
       }
@@ -174,16 +286,16 @@ const App: React.FC = () => {
     if (ctx.state === 'suspended') await ctx.resume();
 
     setItemLoading(true);
+    setImageLoaded(false);
+    setImageError(false);
+    
     try {
-      if (!q.generatedImage) {
-        const img = await geminiService.generateImage(q.imagePrompt);
-        if (img) {
-          const updated = [...questions];
-          updated[idx] = { ...q, generatedImage: `data:image/png;base64,${img}` };
-          setCurrentQuiz(updated);
-        }
+      const img = await geminiService.generateImage(q.correctAnswer);
+      if (img) {
+        const updated = [...questions];
+        updated[idx] = { ...q, generatedImage: img };
+        setCurrentQuiz(updated);
       }
-      // Memutar audio otomatis untuk memperkenalkan kosakata
       playQuizAudio(q.arabicWord);
     } catch (e) {
       console.warn("Failed to load quiz media", e);
@@ -206,6 +318,11 @@ const App: React.FC = () => {
     setSelectedOption(answer);
     const correct = answer === currentQuiz[quizIndex].correctAnswer;
     
+    if (!correct) {
+      setIsWrong(true);
+      setTimeout(() => setIsWrong(false), 500);
+    }
+
     playSfx(correct);
     
     const phrases = correct ? SUCCESS_PHRASES : FAILURE_PHRASES;
@@ -232,44 +349,69 @@ const App: React.FC = () => {
       const q = currentQuiz[quizIndex];
       if (!q) return null;
       return (
-        <div className="space-y-4 animate-in fade-in duration-300">
-          {errorMsg && (
-            <div className="bg-amber-100 border border-amber-300 text-amber-800 p-2 rounded-xl text-[10px] flex items-center gap-2">
-              <AlertCircle size={14} /> {errorMsg}
+        <div className="space-y-4 animate-in fade-in duration-300 pb-10">
+          <div className="flex justify-between items-center px-1">
+            <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-2xl shadow-sm border border-white flex items-center gap-2">
+               <div className="w-6 h-6 bg-sky-100 rounded-full flex items-center justify-center text-[10px] font-kids text-sky-600">Q</div>
+               <span className="font-kids text-sky-600 text-xs">Soal {quizIndex + 1}/{currentQuiz.length}</span>
             </div>
-          )}
-          
-          <div className="flex justify-between items-center px-2">
-            <div className="bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-2xl shadow-sm border border-white">
-               <span className="font-kids text-sky-600 text-sm">Soal {quizIndex + 1}/{currentQuiz.length}</span>
-            </div>
-            <div className="flex items-center gap-2 bg-amber-400 text-white px-4 py-1.5 rounded-2xl shadow-md border-b-4 border-amber-600">
-              <Star size={16} fill="currentColor" />
+            <div className="flex items-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 text-white px-5 py-2 rounded-2xl shadow-lg border-b-4 border-amber-600 transform hover:scale-105 transition-transform">
+              <Star size={18} fill="currentColor" className="animate-pulse" />
               <span className="font-kids text-sm">{score}</span>
             </div>
           </div>
 
-          <div className="bg-white rounded-[2.5rem] p-5 shadow-2xl border-b-[10px] border-sky-100/50 flex flex-col items-center relative overflow-hidden">
-            <div className="w-full aspect-square max-w-[220px] bg-gradient-to-b from-sky-50 to-white rounded-[2rem] overflow-hidden relative mb-4 flex items-center justify-center border-4 border-white shadow-inner">
-              {itemLoading && !q.generatedImage ? (
-                <div className="flex flex-col items-center">
-                  <Loader2 className="animate-spin text-sky-400" size={40} />
-                  <p className="font-kids text-xs text-sky-300 mt-2">Menyiapkan...</p>
+          <div className={`bg-white rounded-[3rem] p-4 shadow-2xl border-b-[12px] border-sky-100/50 flex flex-col items-center relative overflow-hidden transition-all ${isWrong ? 'shake-it' : ''}`}>
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none grid grid-cols-6 gap-2 p-2">
+              {Array.from({length: 24}).map((_, i) => (
+                <div key={i} className="flex items-center justify-center rotate-12"><Sparkles size={20} /></div>
+              ))}
+            </div>
+
+            <div className="w-full aspect-square max-w-[260px] bg-gradient-to-tr from-amber-50 to-white rounded-[3.5rem] overflow-hidden relative mb-6 flex items-center justify-center border-[8px] border-white shadow-xl group">
+              {(itemLoading || !imageLoaded) && !imageError && (
+                <div className="absolute inset-0 z-20 bg-white flex flex-col items-center justify-center">
+                  <div className="relative">
+                    <Loader2 className="animate-spin text-amber-400" size={50} />
+                    <Sparkles className="absolute -top-2 -right-2 text-sky-400 animate-pulse" size={24} />
+                  </div>
+                  <p className="font-kids text-[10px] text-amber-500 mt-4 tracking-widest uppercase animate-pulse">Menyiapkan Gambar...</p>
                 </div>
-              ) : q.generatedImage ? (
-                <img src={q.generatedImage} className="w-full h-full object-cover animate-in zoom-in-50 duration-500" alt="Quiz target" />
-              ) : (
-                <div className="flex flex-col items-center text-sky-200">
-                  <ImageIcon size={50} strokeWidth={1.5} />
+              )}
+
+              {imageError ? (
+                <div className="flex flex-col items-center justify-center text-rose-300 p-6 text-center">
+                  <div className="bg-rose-50 p-6 rounded-full mb-4 shadow-inner">
+                    <ImageOff size={56} />
+                  </div>
+                  <p className="font-kids text-xs text-rose-400 font-bold uppercase tracking-wider">Gambar Tidak Muncul</p>
+                  <button 
+                    onClick={() => { setImageError(false); loadQuizMedia(quizIndex, currentQuiz); }}
+                    className="mt-4 px-6 py-2 bg-sky-500 text-white rounded-full text-xs font-kids shadow-md active:scale-95 transition-all flex items-center gap-2"
+                  >
+                    <RefreshCcw size={14} /> COBA LAGI
+                  </button>
                 </div>
+              ) : q.generatedImage && (
+                <img 
+                  src={q.generatedImage} 
+                  className={`w-full h-full object-contain p-4 transition-all duration-700 ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+                  alt="Quiz target" 
+                  onLoad={() => setImageLoaded(true)}
+                  onError={() => { setImageError(true); setImageLoaded(true); }}
+                />
               )}
               
               {answering && (
-                <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] flex items-center justify-center animate-in zoom-in-90 duration-300">
+                <div className="absolute inset-0 z-30 bg-white/40 backdrop-blur-[4px] flex items-center justify-center animate-in zoom-in-95 duration-300">
                   {selectedOption === q.correctAnswer ? (
-                    <CheckCircle2 size={100} className="text-emerald-500 drop-shadow-xl" />
+                    <div className="bg-emerald-500/90 p-8 rounded-full shadow-2xl animate-bounce border-4 border-white">
+                      <CheckCircle2 size={100} className="text-white drop-shadow-lg" />
+                    </div>
                   ) : (
-                    <XCircle size={100} className="text-rose-500 drop-shadow-xl" />
+                    <div className="bg-rose-500/90 p-8 rounded-full shadow-2xl animate-in fade-in zoom-in duration-200 border-4 border-white">
+                      <XCircle size={100} className="text-white drop-shadow-lg" />
+                    </div>
                   )}
                 </div>
               )}
@@ -278,30 +420,33 @@ const App: React.FC = () => {
             <button 
               onClick={() => playQuizAudio(q.arabicWord)} 
               disabled={isAudioPlaying}
-              className={`group ${isAudioPlaying ? 'bg-sky-400 scale-95' : 'bg-sky-500 hover:bg-sky-600'} text-white px-8 py-5 rounded-[2rem] flex items-center gap-4 mb-4 shadow-lg active:scale-95 transition-all w-full justify-center border-b-4 border-sky-700`}
+              className={`group relative overflow-hidden ${isAudioPlaying ? 'bg-sky-400 scale-95 shadow-inner' : 'bg-sky-500 hover:bg-sky-600'} text-white px-6 py-6 rounded-[2.5rem] flex items-center gap-5 mb-6 shadow-xl active:translate-y-1 transition-all w-full justify-center border-b-[8px] border-sky-700`}
             >
-              <div className={`p-2 rounded-xl transition-all ${isAudioPlaying ? 'bg-white text-sky-500 animate-pulse scale-110 shadow-lg' : 'bg-white/20'}`}>
-                {isAudioPlaying ? <Volume2 size={28} /> : <Volume2 size={28} />}
+              <div className={`p-3 rounded-2xl transition-all ${isAudioPlaying ? 'bg-white text-sky-500 animate-pulse scale-110 shadow-lg' : 'bg-white/20'}`}>
+                {isAudioPlaying ? <Volume2 size={32} /> : <PlayCircle size={32} />}
               </div>
-              <div className="flex flex-col items-start leading-none">
-                <span className="text-xs font-kids opacity-80 mb-1">Klik untuk dengar:</span>
-                <span className="font-arabic text-3xl" dir="rtl">{q.arabicWord}</span>
+              <div className="flex flex-col items-start leading-tight">
+                <span className="text-[10px] font-kids opacity-70 mb-1 tracking-widest uppercase">Klik Dengarkan</span>
+                <span className="font-arabic text-4xl" dir="rtl">{q.arabicWord}</span>
               </div>
+              <div className="absolute top-0 -left-[100%] w-1/2 h-full bg-white/20 skew-x-[45deg] group-hover:left-[150%] transition-all duration-700 pointer-events-none"></div>
             </button>
 
-            <h2 className="text-lg font-kids text-gray-800 text-center leading-tight px-2">{q.question}</h2>
+            <div className="px-5 py-4 bg-amber-50/50 rounded-3xl border border-amber-100/50 mb-2 w-full shadow-inner">
+              <h2 className="text-lg font-kids text-gray-800 text-center leading-relaxed tracking-wide drop-shadow-sm">{q.question}</h2>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pb-6">
+          <div className="grid grid-cols-2 gap-4 pb-8">
             {q.options.map((opt, i) => {
               const isCorrect = opt === q.correctAnswer;
               const isSelected = opt === selectedOption;
               
-              let buttonClass = "bg-white text-gray-700 border-gray-100 hover:bg-sky-50";
+              let buttonStyle = "bg-white text-gray-700 border-gray-200 hover:bg-sky-50";
               if (answering) {
-                if (isCorrect) buttonClass = "bg-emerald-500 text-white border-emerald-700 ring-4 ring-emerald-100";
-                else if (isSelected) buttonClass = "bg-rose-500 text-white border-rose-700 ring-4 ring-rose-100";
-                else buttonClass = "bg-white text-gray-300 border-gray-50 opacity-50";
+                if (isCorrect) buttonStyle = "bg-emerald-500 text-white border-emerald-700 ring-8 ring-emerald-100 scale-105 z-10";
+                else if (isSelected) buttonStyle = "bg-rose-500 text-white border-rose-700 ring-8 ring-rose-100 opacity-100";
+                else buttonStyle = "bg-white text-gray-300 border-gray-50 opacity-40 grayscale";
               }
 
               return (
@@ -309,9 +454,9 @@ const App: React.FC = () => {
                   key={i}
                   disabled={answering}
                   onClick={() => handleAnswer(opt)}
-                  className={`p-4 rounded-[1.5rem] font-kids text-sm shadow-md border-b-[6px] transition-all active:translate-y-1 h-20 flex items-center justify-center text-center leading-tight ${buttonClass} ${answering && isCorrect ? 'animate-bounce' : ''}`}
+                  className={`p-4 rounded-[2rem] font-kids text-base shadow-lg border-b-[8px] transition-all active:translate-y-1 h-24 flex items-center justify-center text-center leading-tight btn-quiz-option ${buttonStyle} ${answering && isCorrect ? 'animate-bounce' : ''}`}
                 >
-                  {opt}
+                  <span className="drop-shadow-sm">{opt}</span>
                 </button>
               );
             })}
@@ -319,7 +464,7 @@ const App: React.FC = () => {
         </div>
       );
     }
-
+    
     if (view === AppView.QUIZ_MENU) {
       const themes = Object.keys(STATIC_QUIZ_DATA).map(key => ({
         name: key,
@@ -328,30 +473,33 @@ const App: React.FC = () => {
 
       return (
         <div className="space-y-4 animate-in slide-in-from-right duration-300 pb-12">
-          <div className="rounded-[2rem] p-6 text-white shadow-xl bg-amber-500 relative overflow-hidden">
+          <div className="rounded-[2.5rem] p-7 text-white shadow-xl bg-gradient-to-br from-amber-400 to-amber-600 relative overflow-hidden border-b-[10px] border-amber-700/20">
              <div className="relative z-10">
-               <h2 className="text-2xl font-kids">Pilih Tema Kuis</h2>
-               <p className="text-sm opacity-90">Yuk kita belajar kata-kata baru! ⭐</p>
+               <h2 className="text-3xl font-kids drop-shadow-md">Ayo Main Kuis!</h2>
+               <p className="text-sm opacity-90 font-medium">Kumpulkan 100 Bintang untuk Hadiah Spesial! 🎁</p>
              </div>
-             <Gamepad2 className="absolute -right-6 -bottom-6 text-white/10 w-32 h-32" />
+             <Gamepad2 className="absolute -right-8 -bottom-8 text-white/20 w-40 h-40 rotate-12" />
           </div>
-          <div className="grid gap-3">
+          <div className="grid gap-4">
              {themes.map((t) => (
                <button 
                  key={t.name} 
                  onClick={() => startQuiz(t.name)} 
-                 className="bg-white rounded-2xl p-4 shadow-md border-b-4 border-gray-100 flex items-center justify-between active:translate-y-1 group hover:bg-gray-50 transition-all"
+                 className="bg-white rounded-[2rem] p-5 shadow-lg border-b-[8px] border-gray-100 flex items-center justify-between active:translate-y-1 active:border-b-2 group hover:bg-gray-50 transition-all cursor-pointer"
                >
-                  <div className="flex items-center gap-4">
-                    <div className={`${t.bgColor} ${t.color} p-4 rounded-2xl group-hover:scale-110 transition-transform shadow-inner`}>
+                  <div className="flex items-center gap-5">
+                    <div className={`${t.bgColor} ${t.color} p-5 rounded-3xl group-hover:scale-110 group-hover:rotate-6 transition-transform shadow-inner flex items-center justify-center`}>
                       {t.icon}
                     </div>
-                    <span className="text-md font-kids text-gray-700">{t.name}</span>
+                    <div className="flex flex-col items-start leading-none">
+                       <span className="text-lg font-kids text-gray-700 mb-1">{t.name}</span>
+                       <span className="text-[10px] text-gray-400 font-bold tracking-widest uppercase">10 Soal Seru</span>
+                    </div>
                   </div>
                   {loading && currentCategory === t.name ? (
-                    <Loader2 className="animate-spin text-amber-500" size={24}/>
+                    <div className="bg-amber-100 p-3 rounded-full"><Loader2 className="animate-spin text-amber-500" size={24}/></div>
                   ) : (
-                    <div className="bg-gray-50 p-2 rounded-full text-gray-300 group-hover:text-amber-500 group-hover:bg-amber-50 transition-colors">
+                    <div className="bg-gray-50 p-3 rounded-full text-gray-300 group-hover:text-amber-500 group-hover:bg-amber-50 transition-all group-hover:translate-x-1">
                       <ChevronRight size={24} />
                     </div>
                   )}
@@ -410,7 +558,7 @@ const App: React.FC = () => {
               <button key={item.number || item.id} onClick={() => view === AppView.JUZ_30 ? setSelectedSurah(item) : setSelectedPrayer(item)} className="bg-white rounded-2xl p-4 shadow-md border-b-4 border-gray-100 flex items-center justify-between active:translate-y-1 hover:bg-sky-50 transition-all">
                  <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-kids text-xs text-white shadow-md ${hifzProgress.includes(item.number) ? 'bg-emerald-500' : 'bg-gray-200 text-gray-400'}`}>
-                      {view === AppView.JUZ_30 ? (hifzProgress.includes(item.number) ? <Heart fill="currentColor" size={16}/> : item.number) : <Sparkles size={18}/>}
+                      {view === AppView.JUZ_30 ? (hifzProgress.includes(item.number) ? <Heart fill="currentColor" size={16}/> : item.number) : <Star size={18}/>}
                     </div>
                     <span className="text-sm font-kids text-gray-700">{item.transliteration || item.title}</span>
                  </div>
@@ -469,6 +617,45 @@ const App: React.FC = () => {
                Ayo baca surat ini bareng Ayah & Ibu ya! Menghafal Al-Quran bikin hati senang dan disayang Allah SWT.
              </p>
            </div>
+
+           {loading ? (
+             <div className="flex flex-col items-center justify-center py-10">
+               <Loader2 className="animate-spin text-sky-500 mb-2" size={40} />
+               <p className="font-kids text-sky-500">Memuat ayat...</p>
+             </div>
+           ) : (
+             <div className="space-y-4">
+               {selectedSurah.number !== 1 && (
+                 <div className="bg-white p-8 rounded-[2rem] shadow-md border-b-4 border-emerald-50 text-center">
+                   <div className="font-arabic text-4xl text-emerald-600 leading-loose" dir="rtl">
+                     {BASMALAH_TEXT}
+                   </div>
+                 </div>
+               )}
+
+               {surahAyahs.map((ayah) => (
+                 <div key={ayah.number} className={`bg-white p-6 rounded-[2rem] shadow-md border-b-4 border-gray-100 transition-all ${playingAyahNumber === ayah.number ? 'ring-4 ring-sky-200 bg-sky-50' : ''}`}>
+                   <div className="flex justify-between items-start mb-4">
+                     <div className="bg-sky-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs font-kids">
+                       {ayah.numberInSurah}
+                     </div>
+                     <button 
+                       onClick={() => playAyahAudio(ayah.audio, ayah.number)}
+                       className={`p-3 rounded-2xl shadow-md transition-all active:scale-90 ${playingAyahNumber === ayah.number ? 'bg-amber-400 text-white' : 'bg-sky-100 text-sky-600 hover:bg-sky-200'}`}
+                     >
+                       {playingAyahNumber === ayah.number ? <PauseCircle size={24} /> : <PlayCircle size={24} />}
+                     </button>
+                   </div>
+                   <div className="font-arabic text-4xl text-right leading-loose mb-4 text-gray-800" dir="rtl">
+                     {ayah.text}
+                   </div>
+                   <p className="text-gray-500 text-sm italic font-medium leading-relaxed">
+                     {ayah.translation}
+                   </p>
+                 </div>
+               ))}
+             </div>
+           )}
 
            <div className="fixed bottom-6 left-0 right-0 px-6 z-40 max-w-md mx-auto">
              <button onClick={() => {

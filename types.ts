@@ -8,14 +8,11 @@ export interface ArabicWord {
 }
 
 export interface Verse {
-  nomorAyat: number;
-  teksArab: string;
-  teksLatin: string;
-  teksIndonesia: string;
-  audio: {
-    "01": string;
-    "05": string;
-  };
+  number: number;
+  audio: string;
+  text: string;
+  translation: string;
+  numberInSurah: number;
 }
 
 export interface DailyPrayer {

@@ -71,6 +71,14 @@
         }
         .star-blink { animation: blink 3s ease-in-out infinite; }
 
+        /* Shake Animation */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        .shake-it { animation: shake 0.2s ease-in-out 0s 2; }
+
         /* Chunky Buttons */
         .btn-chunky {
             transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -98,6 +106,14 @@
 
         .card-shadow {
             box-shadow: 0 10px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .btn-quiz-option {
+            box-shadow: 0 8px 0 rgba(0, 0, 0, 0.1);
+        }
+        .btn-quiz-option:active {
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+            transform: translateY(6px);
         }
     </style>
 <script type="importmap">

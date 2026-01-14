@@ -33,15 +33,36 @@ async function decodeAudioData(
   return buffer;
 }
 
+// Pemetaan kata kunci untuk mendapatkan ikon yang paling relevan dari Icons8 Plasticine
+const ICON_MAPPING: Record<string, string> = {
+  // Hewan
+  'qittun': 'cat', 'kalbun': 'dog', 'asadun': 'lion', 'fiilun': 'elephant', 
+  'jamalun': 'camel', 'arnabun': 'rabbit', 'thairun': 'bird', 'samakun': 'fish',
+  'hishaanun': 'horse', 'baqaratun': 'cow', 'qirdun': 'monkey',
+  // Buah
+  'tuffahatun': 'apple', 'mauzun': 'banana', 'burtuqalun': 'orange', 'inabun': 'grapes',
+  'bitthikhun': 'watermelon', 'tamrun': 'date-fruit', 'ananasun': 'pineapple',
+  'rummaanun': 'pomegranate', 'farawilatun': 'strawberry', 'manju': 'mango',
+  // Benda
+  'baabun': 'door', 'nafidzatun': 'window', 'kursiyyun': 'chair', 'maktabun': 'desk',
+  'sariirun': 'bed', 'misbaahun': 'lamp', 'miftahun': 'key', 'mirwahatun': 'fan',
+  'saa\'atun': 'clock', 'haatifun': 'phone',
+  // Kendaraan
+  'sayyaratun': 'car', 'thairatun': 'airplane', 'safinatun': 'ship', 'hafilatun': 'bus',
+  'qitharun': 'train', 'darrajatun': 'bicycle',
+};
+
 export const geminiService = {
   async generateQuizQuestions(category: string): Promise<QuizQuestion[]> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Buatlah 10 soal pilihan ganda tentang kosakata bahasa Arab untuk anak-anak dengan tema: "${category}". 
-        Pertanyaan dalam Bahasa Indonesia. Pilihan jawaban dalam transliterasi Latin. 
-        Sertakan kata Arab asli dan prompt gambar digital art yang ceria.
+        contents: `Buatlah 10 soal pilihan ganda tentang kosakata bahasa Arab untuk anak-anak kecil dengan tema: "${category}". 
+        Pertanyaan dalam Bahasa Indonesia yang sederhana. 
+        Pilihan jawaban dalam transliterasi Latin (lowercase). 
+        Sertakan kata Arab asli.
+        PENTING: Gunakan correctAnswer sebagai kunci utama untuk gambar.
         Format JSON: [{ "question": string, "arabicWord": string, "options": string[], "correctAnswer": string, "imagePrompt": string }]`,
         config: {
           responseMimeType: "application/json",
@@ -68,40 +89,28 @@ export const geminiService = {
     }
   },
 
+  /**
+   * Menggunakan Icons8 Plasticine (Gaya 3D Kartun) yang gratis dan sangat menarik untuk anak.
+   * Tidak membutuhkan API Key sehingga sangat stabil.
+   */
   async generateImage(prompt: string): Promise<string | undefined> {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [{ text: `Cute 3D Pixar style cartoon of ${prompt}, white background, bright colors, for kids.` }],
-        },
-        config: { imageConfig: { aspectRatio: "1:1" } }
-      });
-      const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-      return part?.inlineData?.data;
-    } catch (e) {
-      return undefined;
-    }
+    const key = prompt.toLowerCase().trim();
+    const searchTerm = ICON_MAPPING[key] || key.split(' ')[0];
+    
+    // Icons8 Plasticine style sangat konsisten dan seperti mainan 3D, sangat disukai anak-anak.
+    return `https://img.icons8.com/plasticine/400/${encodeURIComponent(searchTerm)}.png`;
   },
 
-  /**
-   * Narator Suara (Native)
-   * Digunakan untuk feedback agar hemat kuota API
-   */
   playNarrator(text: string) {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'id-ID';
     utterance.rate = 1.0;
-    utterance.pitch = 1.3; // Suara ceria
+    utterance.pitch = 1.3;
     window.speechSynthesis.speak(utterance);
   },
 
-  /**
-   * Suara Bahasa Arab (Gemini TTS)
-   */
   async playSpeech(text: string, ctx: AudioContext) {
     try {
       if (ctx.state === 'suspended') await ctx.resume();
@@ -109,7 +118,7 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan kata ini dalam bahasa Arab dengan sangat jelas, perlahan, dan ramah seperti guru taman kanak-kanak: ${text}` }] }],
+        contents: [{ parts: [{ text: `Ucapkan kata ini dalam bahasa Arab dengan sangat jelas: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { 
@@ -130,7 +139,6 @@ export const geminiService = {
       }
     } catch (e: any) {
       console.warn("TTS Gemini Gagal, menggunakan suara sistem:", e.message);
-      // Fallback ke Web Speech API jika API Gemini sibuk atau error
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ar-SA';
