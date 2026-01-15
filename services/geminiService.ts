@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { QuizQuestion } from "../types";
 
-// Helper: Decode base64 ke Uint8Array
+// Helper: Decode base64 ke Uint8Array (Manual implementation as requested)
 function decode(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -43,7 +43,7 @@ export const geminiService = {
         Pertanyaan dalam Bahasa Indonesia yang sangat sederhana. 
         Pilihan jawaban dalam transliterasi Latin yang mudah dibaca anak-anak. 
         Sertakan kata Arab asli.
-        Berikan "imagePrompt" yang mendeskripsikan objek tersebut dalam gaya kartun 3D yang sangat lucu dan berwarna-warni (Pixar style).
+        Berikan "imagePrompt" yang mendeskripsikan objek tersebut dalam gaya kartun 3D yang sangat lucu dan berwarna-warni (Disney/Pixar style).
         Format JSON: [{ "question": string, "arabicWord": string, "options": string[], "correctAnswer": string, "imagePrompt": string }]`,
         config: {
           responseMimeType: "application/json",
@@ -76,7 +76,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
-          parts: [{ text: `A high-quality, ultra-cute 3D Disney/Pixar style cartoon character of ${prompt}. Isolated on a plain soft pastel background, vibrant colors, kid-friendly, playful.` }],
+          parts: [{ text: `A high-quality, ultra-cute 3D cartoon object of ${prompt}. Pixar style, soft lighting, pastel background, vibrant colors, kid-friendly.` }],
         },
         config: {
           imageConfig: {
@@ -90,9 +90,10 @@ export const geminiService = {
           return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
-      return undefined;
+      throw new Error("No image data in response");
     } catch (e) {
       console.warn("Gemini Image generation failed, using fallback Icons8:", e);
+      // Fallback ke Icons8 Plasticine jika Gemini gagal (biasanya karena limit atau safety filter)
       const searchTerm = prompt.toLowerCase().split(' ').pop() || 'star';
       return `https://img.icons8.com/plasticine/400/${encodeURIComponent(searchTerm)}.png`;
     }
@@ -101,11 +102,14 @@ export const geminiService = {
   async playSpeech(text: string, ctx: AudioContext): Promise<void> {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-      if (ctx.state === 'suspended') await ctx.resume();
+      // Pastikan AudioContext di-resume karena kebijakan browser sering mem-pause secara otomatis
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
       
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Say this Arabic word slowly and clearly for a child: ${text}` }] }],
+        contents: [{ parts: [{ text: `Say this Arabic word clearly for a child: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -123,14 +127,17 @@ export const geminiService = {
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
         source.start(0);
+      } else {
+        throw new Error("No audio data in response");
       }
     } catch (e: any) {
       console.warn("TTS Gemini Gagal, menggunakan suara sistem browser:", e);
+      // Fallback ke Web Speech API jika Gemini TTS gagal
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ar-SA';
-        utterance.rate = 0.7;
+        utterance.rate = 0.8;
         window.speechSynthesis.speak(utterance);
       }
     }
@@ -141,7 +148,7 @@ export const geminiService = {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'id-ID';
-    utterance.rate = 1.0;
+    utterance.rate = 1.1;
     utterance.pitch = 1.2;
     window.speechSynthesis.speak(utterance);
   }
