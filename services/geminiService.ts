@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { QuizQuestion } from "../types";
 
 // Helper: Decode base64 ke Uint8Array
-function decodeBase64(base64: string): Uint8Array {
+function decode(base64: string): Uint8Array {
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
@@ -20,7 +20,7 @@ async function decodeAudioData(
   sampleRate: number = 24000,
   numChannels: number = 1
 ): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
+  const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
@@ -33,36 +33,17 @@ async function decodeAudioData(
   return buffer;
 }
 
-// Pemetaan kata kunci untuk mendapatkan ikon yang paling relevan dari Icons8 Plasticine
-const ICON_MAPPING: Record<string, string> = {
-  // Hewan
-  'qittun': 'cat', 'kalbun': 'dog', 'asadun': 'lion', 'fiilun': 'elephant', 
-  'jamalun': 'camel', 'arnabun': 'rabbit', 'thairun': 'bird', 'samakun': 'fish',
-  'hishaanun': 'horse', 'baqaratun': 'cow', 'qirdun': 'monkey',
-  // Buah
-  'tuffahatun': 'apple', 'mauzun': 'banana', 'burtuqalun': 'orange', 'inabun': 'grapes',
-  'bitthikhun': 'watermelon', 'tamrun': 'date-fruit', 'ananasun': 'pineapple',
-  'rummaanun': 'pomegranate', 'farawilatun': 'strawberry', 'manju': 'mango',
-  // Benda
-  'baabun': 'door', 'nafidzatun': 'window', 'kursiyyun': 'chair', 'maktabun': 'desk',
-  'sariirun': 'bed', 'misbaahun': 'lamp', 'miftahun': 'key', 'mirwahatun': 'fan',
-  'saa\'atun': 'clock', 'haatifun': 'phone',
-  // Kendaraan
-  'sayyaratun': 'car', 'thairatun': 'airplane', 'safinatun': 'ship', 'hafilatun': 'bus',
-  'qitharun': 'train', 'darrajatun': 'bicycle',
-};
-
 export const geminiService = {
   async generateQuizQuestions(category: string): Promise<QuizQuestion[]> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Buatlah 10 soal pilihan ganda tentang kosakata bahasa Arab untuk anak-anak kecil dengan tema: "${category}". 
-        Pertanyaan dalam Bahasa Indonesia yang sederhana. 
-        Pilihan jawaban dalam transliterasi Latin (lowercase). 
+        Pertanyaan dalam Bahasa Indonesia yang sangat sederhana. 
+        Pilihan jawaban dalam transliterasi Latin yang mudah dibaca anak-anak. 
         Sertakan kata Arab asli.
-        PENTING: Gunakan correctAnswer sebagai kunci utama untuk gambar.
+        Berikan "imagePrompt" yang mendeskripsikan objek tersebut dalam gaya kartun 3D yang sangat lucu dan berwarna-warni (Pixar style).
         Format JSON: [{ "question": string, "arabicWord": string, "options": string[], "correctAnswer": string, "imagePrompt": string }]`,
         config: {
           responseMimeType: "application/json",
@@ -84,21 +65,75 @@ export const geminiService = {
       });
       return JSON.parse(response.text || "[]");
     } catch (e: any) {
-      if (e.status === 429 || e.message?.includes('quota')) throw new Error('QUOTA_EXCEEDED');
+      console.error("Quiz generation error:", e);
       throw e;
     }
   },
 
-  /**
-   * Menggunakan Icons8 Plasticine (Gaya 3D Kartun) yang gratis dan sangat menarik untuk anak.
-   * Tidak membutuhkan API Key sehingga sangat stabil.
-   */
   async generateImage(prompt: string): Promise<string | undefined> {
-    const key = prompt.toLowerCase().trim();
-    const searchTerm = ICON_MAPPING[key] || key.split(' ')[0];
-    
-    // Icons8 Plasticine style sangat konsisten dan seperti mainan 3D, sangat disukai anak-anak.
-    return `https://img.icons8.com/plasticine/400/${encodeURIComponent(searchTerm)}.png`;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [{ text: `A high-quality, ultra-cute 3D Disney/Pixar style cartoon character of ${prompt}. Isolated on a plain soft pastel background, vibrant colors, kid-friendly, playful.` }],
+        },
+        config: {
+          imageConfig: {
+            aspectRatio: "1:1"
+          }
+        }
+      });
+
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+      return undefined;
+    } catch (e) {
+      console.warn("Gemini Image generation failed, using fallback Icons8:", e);
+      const searchTerm = prompt.toLowerCase().split(' ').pop() || 'star';
+      return `https://img.icons8.com/plasticine/400/${encodeURIComponent(searchTerm)}.png`;
+    }
+  },
+
+  async playSpeech(text: string, ctx: AudioContext): Promise<void> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Say this Arabic word slowly and clearly for a child: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' }
+            }
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audioBuffer = await decodeAudioData(decode(base64Audio), ctx, 24000, 1);
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      }
+    } catch (e: any) {
+      console.warn("TTS Gemini Gagal, menggunakan suara sistem browser:", e);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ar-SA';
+        utterance.rate = 0.7;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
   },
 
   playNarrator(text: string) {
@@ -107,44 +142,7 @@ export const geminiService = {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'id-ID';
     utterance.rate = 1.0;
-    utterance.pitch = 1.3;
+    utterance.pitch = 1.2;
     window.speechSynthesis.speak(utterance);
-  },
-
-  async playSpeech(text: string, ctx: AudioContext) {
-    try {
-      if (ctx.state === 'suspended') await ctx.resume();
-      
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Ucapkan kata ini dalam bahasa Arab dengan sangat jelas: ${text}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: { 
-            voiceConfig: { 
-              prebuiltVoiceConfig: { voiceName: 'Kore' } 
-            } 
-          },
-        },
-      });
-      
-      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64) {
-        const audioBuffer = await decodeAudioData(decodeBase64(base64), ctx);
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(ctx.destination);
-        source.start(0);
-      }
-    } catch (e: any) {
-      console.warn("TTS Gemini Gagal, menggunakan suara sistem:", e.message);
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ar-SA';
-        utterance.rate = 0.8;
-        window.speechSynthesis.speak(utterance);
-      }
-    }
   }
 };
